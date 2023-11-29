@@ -1,0 +1,73 @@
+/* (1) Number of orders in January, accounting for messy data: */
+
+SELECT count(orderid) 
+  FROM jansales
+ WHERE length(orderid) = 6 AND 
+       orderid <> 'Order ID';
+       
+/* (2) Number of iPhone orders in January: */
+
+SELECT count(orderid) 
+  FROM jansales
+ WHERE length(orderid) = 6 AND 
+       orderid <> 'Order ID' AND 
+       product = 'iPhone';
+       
+/* (3) Display of all customers who placed orders in February: */
+
+SELECT DISTINCT acctnum
+  FROM customers cust
+       JOIN
+       febsales feb ON cust.order_id = feb.orderID
+ WHERE length(orderid) = 6 AND 
+       orderid <> 'Order ID';
+ 
+/* (4) Details of cheapest product sold in January: */
+
+SELECT product,
+       price
+  FROM jansales
+ WHERE length(orderid) = 6 AND 
+       orderid <> 'Order ID' AND 
+       price = (
+                   SELECT min(price) 
+                     FROM jansales
+               )
+ GROUP BY product;
+ 
+/* (4.01) Alternative: */
+
+SELECT DISTINCT product,
+                price
+  FROM jansales
+ ORDER BY price ASC
+ LIMIT 1;
+ 
+/* (5) Total revenue for each product sold in January: */
+
+SELECT product,
+       sum(quantity) * price AS revenue
+  FROM jansales
+ WHERE length(orderid) = 6 AND 
+       orderid <> 'Order ID'
+ GROUP BY product;
+
+/* (6) Details of products sold in February at a particular location: */
+
+SELECT product,
+       sum(quantity) * price AS revenue
+  FROM febsales
+ WHERE location = '548 Lincoln St, Seattle, WA 98101'
+ GROUP BY product;
+
+/* (7) Number of customers who ordered more than 2 products in February, plus their average spend : */
+
+SELECT
+count(distinct cust.acctnum),
+avg(quantity*price)
+FROM BIT_DB.FebSales Feb
+LEFT JOIN BIT_DB.customers cust
+ON FEB.orderid=cust.order_id
+WHERE Feb.Quantity>2
+AND length(orderid) = 6
+AND orderid <> 'Order ID';

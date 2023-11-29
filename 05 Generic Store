@@ -1,4 +1,4 @@
-/* (1) Number of orders in January, accounting for messy data: */
+/* (1) Number of orders placed in January: */
 
 SELECT count(orderid) 
   FROM jansales
@@ -71,3 +71,11 @@ ON FEB.orderid=cust.order_id
 WHERE Feb.Quantity>2
 AND length(orderid) = 6
 AND orderid <> 'Order ID';
+
+/* Details of products sold in Los Angeles: */
+
+SELECT product,
+       sum(quantity) 
+  FROM febsales
+ WHERE location LIKE '%Los Angeles%'
+ GROUP BY 1;

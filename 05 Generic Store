@@ -22,13 +22,12 @@ SELECT DISTINCT acctnum
  WHERE length(orderid) = 6 AND 
        orderid <> 'Order ID';
  
-/* (4) Details of cheapest product sold in January: */
+/* (4) Cheapest product sold in January: */
 
 SELECT product,
        price
   FROM jansales
- WHERE length(orderid) = 6 AND 
-       orderid <> 'Order ID' AND 
+ WHERE 
        price = (
                    SELECT min(price) 
                      FROM jansales
@@ -46,36 +45,87 @@ SELECT DISTINCT product,
 /* (5) Total revenue for each product sold in January: */
 
 SELECT product,
-       sum(quantity) * price AS revenue
+       sum(quantity) * price rev
   FROM jansales
- WHERE length(orderid) = 6 AND 
-       orderid <> 'Order ID'
- GROUP BY product;
+ GROUP BY 1;
 
 /* (6) Details of products sold in February at a particular location: */
 
 SELECT product,
-       sum(quantity) * price AS revenue
+       sum(quantity) * price rev
   FROM febsales
  WHERE location = '548 Lincoln St, Seattle, WA 98101'
- GROUP BY product;
+ GROUP BY 1;
 
-/* (7) Number of customers who ordered more than 2 products in February, plus their average spend : */
+/* (7) Number of customers who ordered more than 2 products in February, plus their average spend: */
 
-SELECT
-count(distinct cust.acctnum),
-avg(quantity*price)
-FROM BIT_DB.FebSales Feb
-LEFT JOIN BIT_DB.customers cust
-ON FEB.orderid=cust.order_id
-WHERE Feb.Quantity>2
-AND length(orderid) = 6
-AND orderid <> 'Order ID';
+SELECT count(DISTINCT cust.acctnum),
+       avg(quantity * price) 
+  FROM BIT_DB.FebSales feb
+       LEFT JOIN
+       BIT_DB.customers cust ON feb.orderid = cust.order_id
+ WHERE feb.Quantity > 2 AND 
+       length(orderid) = 6 AND 
+       orderid <> 'Order ID';
 
-/* Details of products sold in Los Angeles: */
+/* (8) Details of products sold in Los Angeles: */
 
 SELECT product,
        sum(quantity) 
   FROM febsales
  WHERE location LIKE '%Los Angeles%'
  GROUP BY 1;
+ 
+/* (9) Locations in New York receiving at least three orders in January: */
+
+SELECT location,
+       count(orderid) 
+  FROM jansales
+ WHERE location LIKE "%New York%" AND 
+       length(orderid) = 6 AND 
+       orderid <> 'Order ID'
+ GROUP BY 1
+HAVING count(orderid) >= 3;
+
+/* (10) Sales volumes of headphone models: */
+
+SELECT product,
+       sum(quantity) 
+  FROM febsales
+ GROUP BY 1
+HAVING product LIKE "%headphone%";
+
+/* (10.01) Alternative: */
+
+SELECT product,
+       sum(quantity)
+  FROM BIT_DB.FebSales
+ WHERE product LIKE '%headphone%'
+ GROUP BY product;
+ 
+/* (11) Average amount spent per account in February (average across accounts, not by account): */
+
+SELECT sum(quantity * price) / count(DISTINCT acctnum) avg_spend
+  FROM febsales feb
+       LEFT JOIN
+       customers cust ON feb.orderid = cust.order_id
+ WHERE length(orderid) = 6 AND 
+       orderid <> 'Order ID';
+
+/* (12) Average quantity bought per account in February (average across accounts, not by account): */
+
+SELECT sum(quantity) / count(DISTINCT acctnum) 
+  FROM BIT_DB.FebSales feb
+       LEFT JOIN
+       BIT_DB.customers cust ON feb.orderid = cust.order_id
+ WHERE length(orderid) = 6 AND 
+       orderid <> 'Order ID';
+
+/* (13) Top revenue-generating product in January: */
+
+SELECT product,
+       sum(quantity * price) rev
+  FROM jansales
+ GROUP BY 1
+ ORDER BY 2 DESC
+ LIMIT 1;

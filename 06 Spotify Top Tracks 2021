@@ -1,3 +1,32 @@
+/* This project uses data from:
+https://www.kaggle.com/datasets/equinxx/spotify-top-50-songs-in-2021 */
+
+DROP TABLE IF EXISTS SpotifyData;
+
+CREATE TABLE BIT_DB.Spotifydata (
+id integer PRIMARY KEY,
+artist_name varchar NOT NULL,
+track_name varchar NOT NULL,
+track_id varchar NOT NULL,
+popularity integer NOT NULL,
+danceability decimal(4,3) NOT NULL,
+energy decimal(4,3) NOT NULL,
+song_key integer NOT NULL,
+loudness decimal(5,3) NOT NULL,
+song_mode integer NOT NULL,
+speechiness decimal(5,4) NOT NULL,
+acousticness decimal(6,5) NOT NULL,
+instrumentalness decimal(8,7) NOT NULL,
+liveness decimal(5,4) NOT NULL,
+valence decimal(4,3) NOT NULL,
+tempo decimal(6,3) NOT NULL,
+duration_ms integer NOT NULL,
+time_signature integer NOT NULL );
+
+/* The project proper: */
+
+/* (1) Musical characteristics of tracks in general: */
+
 SELECT avg(danceability),
        avg(energy),
        avg(loudness),
@@ -6,11 +35,15 @@ SELECT avg(danceability),
        avg(valence) 
   FROM spotifydata;
 
+/* (2) Distribution of tracks by major vs minor: */
+
 SELECT song_mode,
        count( * ) 
   FROM spotifydata
  GROUP BY 1
  ORDER BY 2 DESC;
+
+/* (3) Artists with multiple placements in Top 50: */
 
 SELECT artist_name,
        count( * ) appearences,
@@ -18,6 +51,8 @@ SELECT artist_name,
   FROM spotifydata
  GROUP BY 1
  ORDER BY 2 DESC;
+
+/* (4) 'Excitedness' of music by artists from (3): */
 
 SELECT artist_name,
        avg(popularity),
@@ -29,6 +64,8 @@ SELECT artist_name,
  GROUP BY 1
 HAVING count(artist_name) > 1
  ORDER BY 2 DESC;
+ 
+/* (5) Categorising 'excitedness' of music by artists from (3): */
 
 SELECT artist_name,
        avg(popularity),
@@ -82,6 +119,8 @@ SELECT artist_name,
 HAVING count(artist_name) > 1
  ORDER BY 2 DESC;
 
+/* (5.01) Alternative: */
+
 WITH temp AS (
     SELECT danceability - (
                               SELECT avg(danceability) 
@@ -117,18 +156,24 @@ SELECT artist_name,
  GROUP BY 1
 HAVING count(artist_name) > 1
  ORDER BY 3 DESC;
+ 
+/* (6) Dense rank of tracks by popularity: */
 
 SELECT track_name,
        artist_name,
        popularity,
        dense_rank() OVER (ORDER BY popularity DESC) popularity_dense_rank
   FROM spotifydata;
+  
+/* (7) Rank of tracks by popularity: */
 
 SELECT track_name,
        artist_name,
        popularity,
        rank() OVER (ORDER BY popularity DESC) popularity_rank
   FROM spotifydata;
+
+/* (8) 'Excitedness' of tracks tranched by poularity: */
 
 WITH temp AS (
     SELECT track_name,
@@ -144,6 +189,8 @@ SELECT CASE WHEN popularity_rank BETWEEN 1 AND 17 THEN '1 - 17' WHEN popularity_
        JOIN
        spotifydata s ON t.tracK_name = s.track_name
  GROUP BY 1;
+ 
+/* (8.01) Alternative: */
 
 WITH temp AS (
     SELECT track_name,

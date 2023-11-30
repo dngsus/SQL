@@ -1,0 +1,162 @@
+SELECT avg(danceability),
+       avg(energy),
+       avg(loudness),
+       avg(speechiness),
+       avg(instrumentalness),
+       avg(valence) 
+  FROM spotifydata;
+
+SELECT song_mode,
+       count( * ) 
+  FROM spotifydata
+ GROUP BY 1
+ ORDER BY 2 DESC;
+
+SELECT artist_name,
+       count( * ) appearences,
+       avg(popularity) 
+  FROM spotifydata
+ GROUP BY 1
+ ORDER BY 2 DESC;
+
+SELECT artist_name,
+       avg(popularity),
+       count(artist_name) appearances,
+       avg(danceability),
+       avg(energy),
+       avg(valence) 
+  FROM spotifydata
+ GROUP BY 1
+HAVING count(artist_name) > 1
+ ORDER BY 2 DESC;
+
+SELECT artist_name,
+       avg(popularity),
+       count(artist_name) appearances,
+       avg(danceability) - (
+                               SELECT avg(danceability) 
+                                 FROM spotifydata
+                           )
+       AS dance_diff,
+       avg(energy) - (
+                         SELECT avg(energy) 
+                           FROM spotifydata
+                     )
+       AS energy_diff,
+       avg(valence) - (
+                          SELECT avg(valence) 
+                            FROM spotifydata
+                      )
+       AS valence_diff,
+       CASE WHEN (avg(danceability) - (
+                                          SELECT avg(danceability) 
+                                            FROM spotifydata
+                                      )
+                 ) > 0 AND 
+                 (avg(energy) - (
+                                    SELECT avg(energy) 
+                                      FROM spotifydata
+                                )
+                 ) > 0 AND 
+                 (avg(valence) - (
+                                     SELECT avg(valence) 
+                                       FROM spotifydata
+                                 )
+                 ) > 0 THEN 'pumped' WHEN (avg(danceability) - (
+                                                                   SELECT avg(danceability) 
+                                                                     FROM spotifydata
+                                                               )
+                                          ) < 0 AND 
+                                          (avg(energy) - (
+                                                             SELECT avg(energy) 
+                                                               FROM spotifydata
+                                                         )
+                                          ) < 0 AND 
+                                          (avg(valence) - (
+                                                              SELECT avg(valence) 
+                                                                FROM spotifydata
+                                                          )
+                                          ) < 0 THEN 'subdued' ELSE 'mixed' END AS excitment_factor
+  FROM spotifydata
+ GROUP BY 1
+HAVING count(artist_name) > 1
+ ORDER BY 2 DESC;
+
+WITH temp AS (
+    SELECT danceability - (
+                              SELECT avg(danceability) 
+                                FROM spotifydata
+                          )
+           dance_diff,
+           energy - (
+                        SELECT avg(energy) 
+                          FROM spotifydata
+                    )
+           energy_diff,
+           valence - (
+                         SELECT avg(valence) 
+                           FROM spotifydata
+                     )
+           valence_diff,
+           popularity,
+           artist_name
+      FROM spotifydata
+)
+SELECT artist_name,
+       count( * ) appearances,
+       avg(popularity),
+       dance_diff,
+       energy_diff,
+       valence_diff,
+       CASE WHEN dance_diff > 0 AND 
+                 energy_diff > 0 AND 
+                 valence_diff > 0 THEN 'pumped' WHEN dance_diff < 0 AND 
+                                                     energy_diff < 0 AND 
+                                                     valence_diff < 0 THEN 'subdued' ELSE 'mixed' END excitement_factor
+  FROM temp
+ GROUP BY 1
+HAVING count(artist_name) > 1
+ ORDER BY 3 DESC;
+
+SELECT track_name,
+       artist_name,
+       popularity,
+       dense_rank() OVER (ORDER BY popularity DESC) popularity_dense_rank
+  FROM spotifydata;
+
+SELECT track_name,
+       artist_name,
+       popularity,
+       rank() OVER (ORDER BY popularity DESC) popularity_rank
+  FROM spotifydata;
+
+WITH temp AS (
+    SELECT track_name,
+           rank() OVER (ORDER BY popularity DESC) popularity_rank
+      FROM spotifydata
+)
+SELECT CASE WHEN popularity_rank BETWEEN 1 AND 17 THEN '1 - 17' WHEN popularity_rank BETWEEN 18 AND 34 THEN '17 - 34' ELSE '35 - 50' END popularity_cat,
+       avg(popularity),
+       avg(danceability),
+       avg(energy),
+       avg(valence) 
+  FROM temp t
+       JOIN
+       spotifydata s ON t.tracK_name = s.track_name
+ GROUP BY 1;
+
+WITH temp AS (
+    SELECT track_name,
+           ntile(3) OVER (ORDER BY popularity DESC) rank_group
+      FROM spotifydata
+)
+SELECT CASE WHEN rank_group = 1 THEN 'Top 1/3' WHEN rank_group = 2 THEN 'Middle 1/3' ELSE 'Bottom 1/3' END popularity_cat,
+       avg(popularity),
+       avg(danceability),
+       avg(energy),
+       avg(valence) 
+  FROM temp t
+       JOIN
+       spotifydata s ON t.track_name = s.track_name
+ GROUP BY 1
+ ORDER BY 2 DESC;

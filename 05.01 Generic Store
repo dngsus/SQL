@@ -1,36 +1,36 @@
-/* To be added to 05 */
+/* Replicated from Project '05 Generic Store'. */
 
 /* If error: "1st order by term out of range" - close window + reopen usually fixes. */
 
-/* Items with questions/doubts: 7.02, 10(/11), 11.01, 11.02. */
+/* Items with questions/doubts: 13.02, 18.01, 18.02. */
 
-/* (7) Number of customers with Feb orders involving >2 products at once, with their aggregated average spend on such transactions.
+/* (13) Number of customers with Feb orders involving >2 products at once, with their aggregated average spend on such transactions.
 I.e. across these 278 customers, what was the average spend, only considering their orders involving quantity > 2? */
 
-SELECT count(distinct cust.acctnum),
-       avg(quantity * price)
-  FROM BIT_DB.FebSales feb
+SELECT count(DISTINCT cust.acctnum),
+       avg(quantity * price) 
+  FROM febsales feb
        JOIN
-       BIT_DB.customers cust ON feb.orderid = cust.order_id
- WHERE feb.Quantity > 2 AND 
+       customers cust ON feb.orderid = cust.order_id
+ WHERE quantity > 2 AND 
        length(orderid) = 6 AND 
        orderid <> 'Order ID';
        
-/* (7.01) Number of Feb orders involving >2 products at once, with the aggregated average spend on such transactions.
-I.e. across these 263 purchases (from 263 orders) involving quantity > 2, what was the average spend per purchase? --> Verification of (7) */
+/* (13.01) Number of Feb orders involving >2 products at once, with their aggregated average spend on such transactions.
+I.e. across these 263 purchases (from 263 orders) involving quantity > 2, what was the average spend per purchase? --> Verification of (13) */
 
 SELECT count(orderid),
        count(DISTINCT orderid),
        avg(price * quantity) 
   FROM febsales
- WHERE Quantity > 2 AND 
+ WHERE quantity > 2 AND 
        length(orderid) = 6 AND 
        orderid <> 'Order ID';
        
-/* (7.02) Explaining discrepancy between (7) and (7.01): */
-/* ?!!?!?!? */
+/* (13.02) Explaining discrepancy between (13) and (13.01): */
+/* [...] */
 
-/* (8) All transactions by customers from (7), i.e. also including any transactions they may have had with quantity <= 2: */
+/* (14) All transactions by customers from (13), i.e. also including any transactions they may have had with quantity <= 2: */
 
 SELECT acctnum,
        orderid,
@@ -49,7 +49,7 @@ SELECT acctnum,
                   orderid <> 'Order ID'
        );
    
-/* (9) Number of customers from (7), with their aggregated average spend on all their Feb orders.
+/* (15) Number of customers from (13), with their aggregated average spend on all their Feb orders.
 I.e. across these 278 customers, what was the average spend, including orders involving quantity <= 2? */
 
 SELECT count(distinct acctnum),
@@ -67,8 +67,8 @@ SELECT count(distinct acctnum),
                   orderid <> 'Order ID'
        );
        
-/* (9.01) Number of orders associated with (7), alongside aggregated average spend in these transactions.
-I.e. across 308 purchases (from 263 transactions), what was the average spend per purchase? --> Verification of (9) */
+/* (15.01) Number of orders associated with (13), alongside aggregated average spend in these transactions.
+I.e. across 308 purchases (from 263 transactions), what was the average spend per purchase? --> Verification of (15) */
 
 SELECT count(orderid),
        count(DISTINCT orderid),
@@ -86,7 +86,7 @@ SELECT count(orderid),
                   orderid <> 'Order ID'
        );
        
-/* (10) Customers who purchased total >2 products in Feb, be it across multiple orders or a singular 'large' order: */
+/* (16) Customers who purchased total >2 products in Feb, be it across multiple orders or a singular 'large' order: */
 
 SELECT acctnum,
        sum(quantity) their_orders
@@ -99,9 +99,33 @@ SELECT acctnum,
 HAVING their_orders > 2
  ORDER BY 2;
 
-/* NOTE (10/11): find a way to replicate a list in the style of (8) such that all relevant orders are shown, and results can be verified in Excel. */
+/* (17) Details of all transactions by customers in (16): */
 
-/* (11) Number of customers in (10): */
+WITH temp AS (
+    SELECT acctnum,
+           sum(quantity) their_orders
+      FROM customers cust
+           JOIN
+           febsales feb ON cust.order_id = feb.orderid
+     WHERE length(orderid) = 6 AND 
+           orderid <> 'Order ID'
+     GROUP BY 1
+    HAVING their_orders > 2
+     ORDER BY 2
+)
+SELECT acctnum,
+       orderid,
+       price,
+       quantity,
+       sum(quantity) OVER (PARTITION BY temp.acctnum) their_net_quantity
+  FROM temp
+       JOIN
+       customers cust ON temp.acctnum = cust.acctnum
+       JOIN
+       febsales feb ON cust.order_id = feb.orderid
+ ORDER BY 1;
+
+/* (18) Number of customers in (16): */
 
 SELECT count(acctnum)
   FROM customers cust 
@@ -116,7 +140,7 @@ SELECT count(acctnum)
            HAVING sum(quantity) > 2
        );
 
-/* (11.01) Alternative: */
+/* (18.01) Alternative: */
 /* NOTE: NEED TO INVESTIGATE WHY 'DISTINCT' NECESSARY */
 /*
 WITH temp AS (
@@ -137,7 +161,7 @@ SELECT count(distinct cust.acctnum)
        orderid <> 'Order ID'
        and their_orders > 2;
 /*
-/* (11.02) Alternative 2. Deliberately commented out to avoid slow run time upwards of 70 secs: */
+/* (18.02) Alternative 2. Deliberately commented out to avoid slow run time upwards of 70 secs: */
 /* NOTE: NEED TO INVESTIGATE WHY 'DISTINCT' NECESSARY */
 /*
 WITH temp AS (
@@ -156,7 +180,7 @@ SELECT count(DISTINCT cust.acctnum) filter(where their_orders > 2)
        orderid <> 'Order ID';
 */       
 
-/* (12) Repeat of (10) alongside these customers' individual average spend (on purchases contributing to their individual tally of quantity >2 in Feb): */
+/* (19) Repeat of (16) alongside these customers' individual average spend (on purchases contributing to their individual tally of quantity >2 in Feb): */
 
 SELECT acctnum,
        avg(quantity * price) 
@@ -175,7 +199,7 @@ SELECT acctnum,
        )
  GROUP BY 1;
        
-/* (12.01) Illustrative example to clarify (12) using sample of relevant customers: */
+/* (19.01) Illustrative example to clarify (19) using sample of relevant customers: */
 
 SELECT acctnum,
        orderid,
@@ -188,7 +212,7 @@ SELECT acctnum,
        febsales feb ON cust.order_id = feb.orderid
  WHERE acctnum IN (10060051, 10073854, 10604929, 10769476, 10805546, 10976666);
  
-/* (13) Number of customers in (10), alongside their aggregated average spend on such purchases (contributing to their invidual tally of quantity >2 in Feb).
+/* (20) Number of customers in (16), alongside their aggregated average spend on such purchases (contributing to their invidual tally of quantity >2 in Feb).
 I.e. across 424 distinct customers, what was their average spend? */
 
 SELECT count(distinct acctnum), avg(quantity * price)
@@ -204,8 +228,8 @@ SELECT count(distinct acctnum), avg(quantity * price)
            HAVING sum(quantity) > 2
        );
        
-/* (13.01) Number of orders associated with (9), alongside aggregated average spend in these transactions (which contributed towards customers' having individual talliess of quantity >2 in Feb).
-I.e. across 690 purchases (from 322 transactions), what was the average spend per purchase? --> Verification of (12) */
+/* (20.01) Number of orders associated with (16), alongside aggregated average spend in these transactions (which contributed towards customers' having individual tallies of quantity >2 in Feb).
+I.e. across 690 purchases (from 322 transactions), what was the average spend per purchase? --> Verification of (20) */
 
 SELECT count(orderid), count(distinct orderid), avg(quantity * price)
   FROM customers cust join febsales feb on cust.order_id = feb.orderid

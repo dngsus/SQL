@@ -1,0 +1,280 @@
+/* This project investigates various aspects of a digital media store. */
+
+/* (1) Distinct billing countries: */
+
+SELECT DISTINCT billingcountry
+  FROM invoices
+ ORDER BY 1;
+
+/* (2) Customers from Brazil, with their full name in a single column: */
+
+SELECT (firstname || ' ' || lastname) cust_full_name,
+       customerid,
+       country
+  FROM customers
+ WHERE country = 'Brazil';
+ 
+/* (3) Brazilian customers and their invoices: */
+
+SELECT customerid,
+       firstname,
+       lastname,
+       invoiceid,
+       invoicedate,
+       total
+  FROM customers cust
+       LEFT JOIN
+       invoices inv ON cust.customerid = inv.customerid
+ WHERE country = 'Brazil';
+ 
+/* (4) Invoices associated with each sales agent: */
+
+SELECT employeeid,
+       emp.firstname,
+       emp.lastname,
+       invoiceid
+  FROM employees emp
+       JOIN
+       customers cust ON emp.employeeid = cust.supportrepid
+       JOIN
+       invoices inv ON cust.customerid = inv.customerid;
+       
+/* (5) Employees who do not make sales (owing to their job function): */
+
+SELECT count(customerid),
+       employeeid,
+       title
+  FROM customers
+       RIGHT JOIN
+       employees emp ON customers.supportrepid = emp.employeeid
+ GROUP BY 2
+HAVING count(customerid) = 0;
+        
+/* (6) Customer and employee details associated with all invoices: */
+
+SELECT cust.customerid cust_id,
+       cust.firstname cust_first,
+       cust.lastname cust_last,
+       cust.country cust_country,
+       emp.employeeid emp_id,
+       emp.firstname emp_first,
+       emp.lastname emp_last,
+       inv.total
+  FROM customers cust
+       JOIN
+       employees emp ON cust.supportrepid = emp.employeeid
+       JOIN
+       invoices inv ON cust.customerid = inv.customerid;
+
+/* (7) Total invoice amounts charged to each customer: */
+ 
+SELECT cust.customerid cust_id,
+       cust.firstname cust_first,
+       cust.lastname cust_last,
+       sum(inv.total) cust_total
+  FROM customers cust
+       LEFT JOIN
+       invoices inv ON cust.customerid = inv.customerid
+ GROUP BY 1,
+          2,
+          3;
+       
+/* (8) Total invoice amounts charged to each customer with even-numbered ID and who spent at least $40.00: */
+   
+SELECT inv.customerid cust_id,
+       firstname cust_first,
+       lastname cust_last,
+       sum(total) cust_total
+  FROM customers cust
+       LEFT JOIN
+       invoices inv ON cust.customerid = inv.customerid
+ WHERE inv.customerid % 2 = 0
+ GROUP BY 1,
+          2,
+          3
+HAVING sum(total) >= 40;
+     
+/* (8) Total invoice amounts adminstered by each employee: */
+
+SELECT emp.employeeid emp_id,
+       emp.firstname emp_first,
+       emp.lastname emp_last,
+       round(sum(inv.total), 2) sales_rev 
+  FROM employees emp
+       JOIN
+       customers cust ON emp.employeeid = cust.supportrepid
+       JOIN
+       invoices inv ON cust.customerid = inv.customerid
+ GROUP BY 1,
+          2,
+          3;
+          
+/* (9) Total invoice amounts adminstered by each employee, broken down by customers charge to: */
+
+SELECT DISTINCT emp.employeeid emp_id,
+                emp.firstname emp_first,
+                emp.lastname emp_last,
+                cust.customerid cust_id,
+                cust.firstname cust_first,
+                cust.lastname cust_last,
+                round(sum(inv.total) OVER (PARTITION BY emp.employeeid,
+                      cust.customerid), 2) emp_cust_rev,
+                round(sum(inv.total) OVER (PARTITION BY emp.employeeid), 2) emp_net_rev
+  FROM customers cust
+       JOIN
+       employees emp ON cust.supportrepid = emp.employeeid
+       JOIN
+       invoices inv ON cust.customerid = inv.customerid;
+       
+/* (10) Total invoice amounts per customer country (billing country): */
+
+SELECT billingcountry,
+       round(sum(total), 2) sales_to_country
+  FROM invoices
+ GROUP BY 1;
+ 
+/* (11) Countries and employees associated with all invoices: */
+
+SELECT billingcountry,
+       employeeid,
+       emp.firstname emp_first,
+       emp.lastname emp_last,
+       invoiceid,
+       total
+  FROM invoices inv
+       JOIN
+       customers cust ON inv.customerid = cust.customerid
+       JOIN
+       employees emp ON cust.supportrepid = emp.employeeid;
+
+/* (12) Invoice amounts charged per country: */
+
+SELECT billingcountry,
+       sum(total) sales_to_country
+  FROM invoices
+ GROUP BY 1;
+
+/* (13) Invoice amounts charged per country per employee: */
+
+SELECT billingcountry,
+       employeeid,
+       emp.firstname emp_first,
+       emp.lastname emp_last,
+       sum(total) country_emp_total
+  FROM invoices inv
+       JOIN
+       customers cust ON inv.customerid = cust.customerid
+       JOIN
+       employees emp ON cust.supportrepid = emp.employeeid
+ GROUP BY 1,
+          2,
+          3,
+          4;
+
+
+/* (14) Invoice amounts chared per country per employee, alongside total charged to each country overall:  */
+
+SELECT DISTINCT billingcountry,
+                employeeid,
+                emp.firstname emp_first,
+                emp.lastname emp_last,
+                sum(inv.total) OVER (PARTITION BY billingcountry,
+                employeeid) country_emp_pair_total,
+                sum(inv.total) OVER (PARTITION BY billingcountry) country_total
+  FROM invoices inv
+       JOIN
+       customers cust ON inv.customerid = cust.customerid
+       JOIN
+       employees emp ON cust.supportrepid = emp.employeeid;
+
+/* (15) Invoice line IDs alongside associated purchased track name and artist name: */
+
+SELECT invoicelineid,
+       tra.name track,
+       art.name album
+  FROM invoice_items invit
+       JOIN
+       tracks tra ON invit.trackid = tra.trackid
+       JOIN
+       albums alb ON tra.albumid = alb.albumid
+       JOIN
+       artists art ON alb.artistid = art.artistid;
+
+/* (16) Selection of 50 tracks alongside associated artist name, album name, media type and genre: */
+
+SELECT tra.trackid,
+       tra.name track,
+       art.name artist,
+       alb.title album,
+       med.name media_type,
+       gen.name genre
+  FROM tracks tra
+       JOIN
+       artists art ON alb.artistid = art.artistid
+       JOIN
+       albums alb ON tra.albumid = alb.albumid
+       JOIN
+       genres gen ON tra.genreid = gen.genreid
+       JOIN
+       media_types med ON tra.mediatypeid = med.mediatypeid
+ LIMIT 50;
+       
+/* (17) Longest 50 tracks, ranked: */
+
+SELECT trackid,
+       name track,
+       milliseconds duration,
+       dense_rank() OVER (ORDER BY milliseconds DESC) rank_by_duration
+  FROM tracks
+ ORDER BY 4
+ LIMIT 50;
+
+/* (18) Albums with greatest durations (total run-time), ranked: */
+
+SELECT alb.albumid,
+       alb.title,
+       sum(milliseconds) duration,
+       dense_rank() OVER (ORDER BY sum(milliseconds) DESC) rank_by_duration
+  FROM albums alb
+       JOIN
+       tracks tra ON alb.albumid = tra.albumid
+ GROUP BY 1, 2
+ ORDER BY 4;
+
+/* (19) Classifying albums by duration: */
+
+WITH temp AS (
+    SELECT alb.albumid alb_id,
+           alb.title alb_title,
+           sum(milliseconds) duration
+      FROM albums alb
+           JOIN
+           tracks tra ON alb.albumid = tra.albumid
+     GROUP BY 1,
+              2
+)
+SELECT alb_id,
+       alb_title,
+       CASE WHEN duration >= (
+                                 SELECT avg(duration) 
+                                   FROM temp
+                             )
+       THEN 'avg_or_more_duration' ELSE 'shorter_than_avg' END AS duration_category
+  FROM temp;
+  
+/* (20) Number of albums in certain bands of durations: */
+
+WITH temp AS (
+    SELECT alb.albumid alb_id,
+           alb.title alb_title,
+           sum(milliseconds) duration
+      FROM albums alb
+           JOIN
+           tracks tra ON alb.albumid = tra.albumid
+     GROUP BY 1,
+              2
+)
+SELECT count(alb_id) FILTER (WHERE duration BETWEEN 0 AND 3000000) AS shorter,
+       count(alb_id) FILTER (WHERE 3000000 < duration <= 6000000) AS medium,
+       count(alb_id) FILTER (WHERE 6000000 > duration) AS long
+  FROM temp;

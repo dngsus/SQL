@@ -1,4 +1,4 @@
-/* This project investigates various aspects of a digital media store. */
+/* This project investigates various aspects of a digital media store (https://docs.yugabyte.com/preview/sample-data/chinook/#install-the-chinook-sample-database). */
 
 /* (1) Distinct billing countries: */
 

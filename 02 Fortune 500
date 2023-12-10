@@ -1,4 +1,10 @@
-/* This project uses the following data: */
+/* This project concerns a semi-fictional collection of large companies across industries.
+
+I investigate and compare revenues between (groups of) companies.
+
+uses the following data: */
+
+drop table if exists fortune_companies;
 
 CREATE TABLE fortune_companies (
     company_id INTEGER PRIMARY KEY,
@@ -60,65 +66,104 @@ VALUES
 
 /* The project proper: */
 
-/* (1) Getting a sense for distribution of revenues */
+/* (1) Investigating the distribution in revenues of the population: */
+
+/* (1.01) Getting a sense for range of revenues: */
     
 select
   round(min(revenue)) min_rev,
-  round(avg(revenue)) avg_rev,
-  round(max(revenue)) max_rev
+  round(avg(revenue)) mean_rev,
+    round(max(revenue)) max_rev
 from fortune_companies;
 
-/* (2) Categorising companies by revenue */
+/* (1.02) Finding the median revenue value: */
 
-select
-  company_name,
-  case
-    when revenue < (select avg(revenue) from fortune_companies) then "Below avg rev"
-    when revenue >= (select avg(revenue) from fortune_companies) then "Avg or better rev"
-    end as revenue_category
-from fortune_companies
-group by 1;
+SELECT round(AVG(revenue)) med_rev
+FROM (SELECT revenue
+      FROM fortune_companies
+      ORDER BY revenue
+      LIMIT 2 - (SELECT COUNT(*) FROM fortune_companies) % 2    -- odd count(*) has limit 1; even count(*) has limit 2
+      OFFSET (SELECT (COUNT(*) - 1) / 2
+              FROM fortune_companies));
+              
+/* (1.03) Finding values at quartiles: */
 
-/* (3) Investigating distribution of companies as per their revenue categorisation */
+SELECT round(max(CASE WHEN rev_quartile = 1 THEN revenue END) ) Q1,
+       round(max(CASE WHEN rev_quartile = 2 THEN revenue END) ) Median,
+       round(max(CASE WHEN rev_quartile = 3 THEN revenue END) ) Q3,
+       round(max(CASE WHEN rev_quartile = 4 THEN revenue END) ) Max
+  FROM (
+           SELECT revenue,
+                  ntile(4) OVER (ORDER BY revenue) rev_quartile
+             FROM fortune_companies
+            ORDER BY revenue
+       );
 
-select
-  count(*),
-  case
-    when revenue < (select avg(revenue) from fortune_companies) then "Below avg rev"
-    when revenue >= (select avg(revenue) from fortune_companies) then "Avg or better rev"
-    end as revenue_category
-from fortune_companies
-group by 2;
-
-/* (4) Categorising companies in particular industries by their revenue */
-
-select
-  company_name,
-  case
-    when revenue < (select avg(revenue) from fortune_companies) then "Below avg rev"
-    when revenue >= (select avg(revenue) from fortune_companies) then "Avg or better rev"
-    end as revenue_category
-from fortune_companies
-group by 1
-having industry in ("Technology", "Telecommunications");
-
-/* (5) Investigating distribution of companies from (4) as per their revenue categorisation */
+/* (1.04) Investigating distribution of companies around the mean revenue value: */
 
 select
   count(*),
   case
-    when revenue < (select avg(revenue) from fortune_companies) then "Below avg rev"
-    when revenue >= (select avg(revenue) from fortune_companies) then "Avg or better rev"
-    end as revenue_category
+    when revenue < (select avg(revenue) from fortune_companies) then "Below mean rev"
+    when revenue >= (select avg(revenue) from fortune_companies) then "Avg or above mean rev"
+    end as mean_rev_cat
 from fortune_companies
-where industry in ("Technology", "Telecommunications")
 group by 2;
+            
+/* (1.05) Investigating distribution of companies in terms of quartiles: */
 
-/* (6) Categorising companies from (4) as per their revenue categorisation,
+SELECT rev_quartile,
+       COUNT(*) AS no_in_quartile
+FROM (
+    SELECT company_id, revenue,
+           ntile(4) OVER (ORDER BY revenue) rev_quartile
+    FROM fortune_companies
+    ORDER BY revenue
+)
+GROUP BY rev_quartile
+ORDER BY rev_quartile;
+
+ 
+/* Takeaways from (1):
+    - In terms of revenues, companies are symmetrically distributed around the mean, and even quartiles are equally sized.
+
+/* (2) Exploring similar statistics on a more constrained sample: */
+
+/* (2.01) Categorising companies in 'tech' industries by their revenue: */
+
+SELECT
+  company_name,
+  revenue,
+  (SELECT avg(revenue) FROM fortune_companies) overall_avg_rev,
+  CASE
+    WHEN revenue < (SELECT avg(revenue) FROM fortune_companies) THEN 'Below avg rev'
+    WHEN revenue >= (SELECT avg(revenue) FROM fortune_companies) THEN 'Avg or better rev'
+  END AS revenue_category
+FROM fortune_companies
+GROUP BY 1
+HAVING industry IN ('Technology', 'Telecommunications');
+
+/* (2.02) Investigating distribution of companies from (2.01) as per their revenue categorisation */
+
+select
+  count(*),
+  case
+    when revenue < (select avg(revenue) from fortune_companies) then "Below mean rev"
+    when revenue >= (select avg(revenue) from fortune_companies) then "Avg or above mean rev"
+    end as mean_rev_cat
+from fortune_companies where industry IN ('Technology', 'Telecommunications')
+group by 2;
+            
+
+/* (2.03) Categorising companies from (2.01) as per their revenue categorisation,
 assuming less than average employee headcount */
 
 select
   company_name,
+    revenue,
+  (SELECT avg(revenue) FROM fortune_companies) overall_avg_rev,
+  employees,
+  (SELECT avg(employees) FROM fortune_companies) overall_avg_emp,
   case
     when revenue < (select avg(revenue) from fortune_companies) then "Below avg rev"
     when revenue >= (select avg(revenue) from fortune_companies) then "Avg or better rev"
@@ -129,31 +174,24 @@ having
   industry in ("Technology", "Telecommunications")
   and employees < (select avg(employees) from fortune_companies);
   
-/* (7) Investigating distribution of companies from (6) as per their revenue categorisation */
+/* (2.04) Investigating distribution of companies from (2.03) as per their revenue categorisation */
 
 select
   count(*),
   case
-    when revenue < (select avg(revenue) from fortune_companies) then "Below avg rev"
-    when revenue >= (select avg(revenue) from fortune_companies) then "Avg or better rev"
-    end as revenue_category
-from
-  fortune_companies
-where
-  industry in ("Technology", "Telecommunications")
-  and employees < (select avg(employees) from fortune_companies)
+    when revenue < (select avg(revenue) from fortune_companies) then "Below mean rev"
+    when revenue >= (select avg(revenue) from fortune_companies) then "Avg or above mean rev"
+    end as mean_rev_cat
+from fortune_companies where industry IN ('Technology', 'Telecommunications') and employees < (select avg(employees) from fortune_companies)
 group by 2;
 
-/* (8) Comparing total revenues from particular groups of industries,
-alongside a count of how many companies are in said group */
+/* (2.05) Comparing revenues across companies grouped by industry: */
 
-select
-  case
-    when industry in ("Technology", "Telecommunications") then "Tech"
-    else "Not Tech"
-    end as industry_category,
-  sum(revenue),
-count(*) no_companies_in_industry
-from
-  fortune_companies
-group by 1
+SELECT CASE WHEN industry IN ("Technology", "Telecommunications") THEN "Tech" ELSE "Not Tech" END AS industry_category,
+       sum(revenue),
+       count( * ) no_companies_in_industry,
+       sum(revenue) / count( * ) industry_avg_rev,
+       sum(employees),
+       sum(revenue) / sum(employees) per_head_rev
+  FROM fortune_companies
+ GROUP BY 1;

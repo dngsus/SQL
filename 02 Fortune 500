@@ -1,8 +1,11 @@
 /* This project concerns a semi-fictional collection of large companies across industries.
+I investigate and compare revenues between (groups of) companies. */
 
-I investigate and compare revenues between (groups of) companies.
+/* Overall takeaways:
+    - Companies are split evenly above and below mean revenue, and this does not change when they are split into 'tech' or 'non-tech' firms, nor if within these categories, constraints on employee headcount (< mean headcount) are placed.
+    - There are signs that larger companies (> mean headcount), irrespective of industry, do have notably higher revenues, although not in terms of per-head values.
 
-uses the following data: */
+/* This project uses the following data: */
 
 drop table if exists fortune_companies;
 
@@ -66,15 +69,14 @@ VALUES
 
 /* The project proper: */
 
-/* (1) Investigating the distribution in revenues of the population: */
+/* (1) Investigating revenue e.g. descriptive statistics, distribution in revenues of the population: */
 
-/* (1.01) Getting a sense for range of revenues: */
+/* (1.01) Initial descriptive statistics: */
     
-select
-  round(min(revenue)) min_rev,
-  round(avg(revenue)) mean_rev,
-    round(max(revenue)) max_rev
-from fortune_companies;
+SELECT round(min(revenue) ) min_rev,
+       round(avg(revenue) ) mean_rev,
+       round(max(revenue) ) max_rev
+  FROM fortune_companies;
 
 /* (1.02) Finding the median revenue value: */
 
@@ -82,51 +84,53 @@ SELECT round(AVG(revenue)) med_rev
 FROM (SELECT revenue
       FROM fortune_companies
       ORDER BY revenue
-      LIMIT 2 - (SELECT COUNT(*) FROM fortune_companies) % 2    -- odd count(*) has limit 1; even count(*) has limit 2
+      LIMIT 2 - (SELECT COUNT(*) FROM fortune_companies) % 2    -- odd count(*) has limit 1; even 2 (mean of middle two values)
       OFFSET (SELECT (COUNT(*) - 1) / 2
               FROM fortune_companies));
               
 /* (1.03) Finding values at quartiles: */
 
-SELECT round(max(CASE WHEN rev_quartile = 1 THEN revenue END) ) Q1,
-       round(max(CASE WHEN rev_quartile = 2 THEN revenue END) ) Median,
-       round(max(CASE WHEN rev_quartile = 3 THEN revenue END) ) Q3,
-       round(max(CASE WHEN rev_quartile = 4 THEN revenue END) ) Max
+SELECT round(max(CASE WHEN rev_quart = 1 THEN revenue END)) Q1,
+       round(max(CASE WHEN rev_quart = 2 THEN revenue END)) Med,
+       round(max(CASE WHEN rev_quart = 3 THEN revenue END)) Q3,
+       round(max(CASE WHEN rev_quart = 4 THEN revenue END)) Max
   FROM (
            SELECT revenue,
-                  ntile(4) OVER (ORDER BY revenue) rev_quartile
+                  ntile(4) OVER (ORDER BY revenue) rev_quart
              FROM fortune_companies
             ORDER BY revenue
        );
 
 /* (1.04) Investigating distribution of companies around the mean revenue value: */
 
-select
-  count(*),
-  case
-    when revenue < (select avg(revenue) from fortune_companies) then "Below mean rev"
-    when revenue >= (select avg(revenue) from fortune_companies) then "Avg or above mean rev"
-    end as mean_rev_cat
-from fortune_companies
-group by 2;
-            
-/* (1.05) Investigating distribution of companies in terms of quartiles: */
+SELECT count( * ),
+       CASE
+           WHEN revenue < (SELECT avg(revenue) FROM fortune_companies)
+               THEN "Below mean rev"
+           WHEN revenue >= (SELECT avg(revenue) FROM fortune_companies)
+               THEN "Avg or above mean rev"
+           END mean_rev_cat
+  FROM fortune_companies
+ GROUP BY 2;
 
-SELECT rev_quartile,
-       COUNT(*) AS no_in_quartile
+/* (1.05) For the sake of practice, confirming companies are defined equally across quartiles: */
+
+SELECT rev_quart,
+       COUNT(*) no_in_quart
 FROM (
-    SELECT company_id, revenue,
-           ntile(4) OVER (ORDER BY revenue) rev_quartile
+    SELECT
+        company_id,
+        revenue,
+        ntile(4) OVER (ORDER BY revenue) rev_quart
     FROM fortune_companies
     ORDER BY revenue
 )
-GROUP BY rev_quartile
-ORDER BY rev_quartile;
+GROUP BY rev_quart
+ORDER BY rev_quart;
 
- 
 /* Takeaways from (1):
-    - In terms of revenues, companies are symmetrically distributed around the mean, and even quartiles are equally sized.
-
+    - Company revenues seem to be distributed fairly symmetrically around the mean, although the mean is pulled up (higher than the median) due to notably high figures at the top end.
+    
 /* (2) Exploring similar statistics on a more constrained sample: */
 
 /* (2.01) Categorising companies in 'tech' industries by their revenue: */
@@ -134,29 +138,28 @@ ORDER BY rev_quartile;
 SELECT
   company_name,
   revenue,
-  (SELECT avg(revenue) FROM fortune_companies) overall_avg_rev,
+  (SELECT round(avg(revenue),2) FROM fortune_companies) overall_avg_rev,
   CASE
     WHEN revenue < (SELECT avg(revenue) FROM fortune_companies) THEN 'Below avg rev'
     WHEN revenue >= (SELECT avg(revenue) FROM fortune_companies) THEN 'Avg or better rev'
-  END AS revenue_category
+  END rev_cat
 FROM fortune_companies
 GROUP BY 1
 HAVING industry IN ('Technology', 'Telecommunications');
 
-/* (2.02) Investigating distribution of companies from (2.01) as per their revenue categorisation */
+/* (2.02) Investigating distribution of tech companies as per their revenue categorisation */
 
 select
   count(*),
   case
     when revenue < (select avg(revenue) from fortune_companies) then "Below mean rev"
     when revenue >= (select avg(revenue) from fortune_companies) then "Avg or above mean rev"
-    end as mean_rev_cat
+    end mean_rev_cat
 from fortune_companies where industry IN ('Technology', 'Telecommunications')
 group by 2;
-            
 
-/* (2.03) Categorising companies from (2.01) as per their revenue categorisation,
-assuming less than average employee headcount */
+/* (2.03) Categorising tech companies from (2.01) as per their revenue categorisation,
+assuming less than mean average employee headcount */
 
 select
   company_name,
@@ -174,7 +177,7 @@ having
   industry in ("Technology", "Telecommunications")
   and employees < (select avg(employees) from fortune_companies);
   
-/* (2.04) Investigating distribution of companies from (2.03) as per their revenue categorisation */
+/* (2.04) Investigating distribution of tech companies from (2.03) as per their revenue categorisation */
 
 select
   count(*),
@@ -185,13 +188,75 @@ select
 from fortune_companies where industry IN ('Technology', 'Telecommunications') and employees < (select avg(employees) from fortune_companies)
 group by 2;
 
-/* (2.05) Comparing revenues across companies grouped by industry: */
+/* Note: as 'tech' and 'non-tech' are collectively exhaustive, it follows that the even distribution of tech companies about the mean implies the same for non-tech companies. Regardless, queries to investigate this are below. */
+
+/* (2.05) Investigating distribution of non-tech companies as per their revenue categorisation */
+
+select
+  count(*),
+  case
+    when revenue < (select avg(revenue) from fortune_companies) then "Below mean rev"
+    when revenue >= (select avg(revenue) from fortune_companies) then "Avg or above mean rev"
+    end mean_rev_cat
+from fortune_companies where industry NOT IN ('Technology', 'Telecommunications')
+group by 2;
+
+/* (2.06) Investigating distribution of non-tech companies as per their revenue categorisation */
+
+select
+  count(*),
+  case
+    when revenue < (select avg(revenue) from fortune_companies) then "Below mean rev"
+    when revenue >= (select avg(revenue) from fortune_companies) then "Avg or above mean rev"
+    end as mean_rev_cat
+from fortune_companies where industry NOT IN ('Technology', 'Telecommunications')
+    and employees < (select avg(employees) from fortune_companies)
+group by 2;
+
+/* Takeaways from (2):
+    - Even isolated into 'tech' and 'non-tech' groups, distribution is still fairly even around the mean in terms of revenue.
+    - Having less than average headcount does not impact these distribution patterns.
+
+/* (3) Comparing tech vs non-tech companies directly: */
+
+/* (3.01) Comparing revenues across companies grouped by industry: */
 
 SELECT CASE WHEN industry IN ("Technology", "Telecommunications") THEN "Tech" ELSE "Not Tech" END AS industry_category,
        sum(revenue),
-       count( * ) no_companies_in_industry,
+       count( * ) no_comp_in_industry,
        sum(revenue) / count( * ) industry_avg_rev,
-       sum(employees),
+       sum(employees) / 1000 industry_headcount_thousands,
        sum(revenue) / sum(employees) per_head_rev
   FROM fortune_companies
  GROUP BY 1;
+ 
+/* (3.02) Comparing revenues across companies grouped by industry, assuming below average headcount: */
+ 
+SELECT CASE WHEN industry IN ("Technology", "Telecommunications") THEN "Tech" ELSE "Not Tech" END AS industry_category,
+       sum(revenue),
+       count( * ) no_comp_in_industry,
+       sum(revenue) / count( * ) industry_avg_rev,
+        sum(employees) / 1000 industry_headcount_thousands,
+       sum(revenue) / sum(employees) per_head_rev
+  FROM fortune_companies
+  WHERE employees < (SELECT avg(employees) FROM fortune_companies)
+ GROUP BY 1;
+ 
+/* Comments for (3):
+    - Across industry categories, having less than average headcount does reduce both absolute/overall revenues and per-head revenues.
+    - Further statistical procedures should be undertaken to quantify this more exactly and ascertain significance.
+    - Indeed from (3.03) below, which studies the revenue of relatively larger firms, absolute revenue increases whilst per-head figures fall by a lot, indicating there is no simple linear relationship.
+      */
+
+/* (3.03) Revenue analysis of larger firms: */
+ 
+SELECT sum(revenue),
+       count( * ) no_comp_in_industry,
+       sum(revenue) / count( * ) industry_avg_rev,
+       sum(employees) / 1000 industry_headcount_thousands,
+       sum(revenue) / sum(employees) per_head_rev
+  FROM fortune_companies
+ WHERE employees > (
+                       SELECT avg(employees) 
+                         FROM fortune_companies
+                   );

@@ -201,7 +201,7 @@ select
 from fortune_companies where industry NOT IN ('Technology', 'Telecommunications')
 group by 2;
 
-/* (2.06) Investigating distribution of non-tech companies as per their revenue categorisation */
+/* (2.06) Investigating distribution of non-tech companies with fewer than average employees as per their revenue categorisation */
 
 select
   count(*),
@@ -216,6 +216,7 @@ group by 2;
 /* Takeaways from (2):
     - Even isolated into 'tech' and 'non-tech' groups, distribution is still fairly even around the mean in terms of revenue.
     - Having less than average headcount does not impact these distribution patterns.
+    - Note: due to extreme high-values, majority of firms are below the mean in terms of employees.
 
 /* (3) Comparing tech vs non-tech companies directly: */
 

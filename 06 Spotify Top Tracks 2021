@@ -25,32 +25,9 @@ time_signature integer NOT NULL );
 
 /* The project proper: */
 
-/* (1) Musical characteristics of tracks in general: */
+/* (1) As practice, displaying tracks with explicit popularity rankings: */
 
-/* (1.01): */
-
-SELECT avg(danceability),
-       avg(energy),
-       avg(loudness),
-       avg(speechiness),
-       avg(instrumentalness),
-       avg(valence) 
-  FROM spotifydata;
-
-/* (1.02) Distribution of tracks by major vs minor: */
-
-SELECT song_mode,
-       count( * ) 
-  FROM spotifydata
- GROUP BY 1
- ORDER BY 2 DESC;
- 
-/* Comments for (1):
-    - */
-
-/* (2) As practice, displaying tracks with explicit rankings: */
-
-/* (2.01) Dense rank: */
+/* (1.01) Dense rank: */
 
 SELECT track_name,
        artist_name,
@@ -58,7 +35,7 @@ SELECT track_name,
        dense_rank() OVER (ORDER BY popularity DESC) popularity_dense_rank
   FROM spotifydata;
   
-/* (2.02) Rank: */
+/* (1.02) Rank: */
 
 SELECT track_name,
        artist_name,
@@ -66,9 +43,9 @@ SELECT track_name,
        rank() OVER (ORDER BY popularity DESC) popularity_rank
   FROM spotifydata;
 
-/* (3) Investigating characteristics of music by artists with multiple Top 50 placements: */
+/* (2) Investigating characteristics of music by artists with multiple Top 50 placements: */
 
-/* (3.01) Identifying artists with multiple placements in Top 50: */
+/* (2.01) Identifying artists with multiple placements in Top 50: */
 
 SELECT artist_name,
        count( * ) appearences,
@@ -77,7 +54,7 @@ SELECT artist_name,
  GROUP BY 1
  ORDER BY 2 DESC;
 
-/* (3.02) Extracting factors contributing to the 'excitedness' of music by artists from (3.01): */
+/* (2.02) Extracting factors contributing to the 'excitedness' of music by artists from (2.01): */
 
 SELECT artist_name,
        avg(popularity),
@@ -90,9 +67,9 @@ SELECT artist_name,
 HAVING count(artist_name) > 1
  ORDER BY 2 DESC;
  
-/* (3.03-a) Categorising 'excitedness' of music by artists from (3.01)
+/* (2.03-a) Categorising 'excitedness' of music by artists from (2.01)
 with the criteria that
-each 'avg-relevant-characteristic-per-artist' must exceed the overall/population average for that same characteristic to be considered 'relatively pumped',
+each 'avg-of-relevant-characteristic-per-artist' must exceed the overall/population average for that same characteristic to be considered 'relatively pumped',
 vice versa for 'relatively subdued',
 and self-explanatory for 'mixed': */
 
@@ -135,7 +112,7 @@ SELECT spot.artist_name,
  GROUP BY 1
  ORDER BY 2 DESC;
  
-/* (3.03-b) Aggregation (count) of categories from (3.03-a): */
+/* (2.03-b) Aggregation (count) of categories from (2.03-a): */
 
 WITH temp AS (
     SELECT id,
@@ -177,16 +154,16 @@ SELECT spot.artist_name,
        JOIN
        temp2 ON spot.id = temp2.id
  GROUP BY 1
- ORDER BY 2;
+ ORDER BY 2 desc;
 
    
-/* (3.04) Now considering 'excitedness' of music by artists from (3.01)
-under a stronger criteria which dictates that the average excitedness per artist (average of summation of average of relevant characteristics per artist)
+/* (2.04) Now considering 'excitedness' of music by artists from (2.01)
+under a stronger criteria which dictates that the average excitedness per artist (now defined as the summation of average of relevant characteristics per artist)
 must be in the top quartile of average excitedness aggregated over the population to be 'relatively pumped',
 in the bottom quartile for 'relatively subdued',
 and self-explanatory for 'mixed': */
 
-/* (3.04-a) Defining excitedness and identifying bounds of its lowest and highest quartiles across the population: */
+/* (2.04-a) Defining excitedness and identifying bounds of its lowest and highest quartiles across the population: */
 
 with temp as 
 (select id, danceability + energy + valence as excitedness from spotifydata),
@@ -198,11 +175,11 @@ ntile(4) OVER (ORDER BY excitedness) exc_quart
             ORDER BY 1)
             
 SELECT
-max(CASE WHEN exc_quart = 1 THEN excitedness END) Q1,
-       max(CASE WHEN exc_quart = 3 THEN excitedness END) Q3
+max(CASE WHEN exc_quart = 1 THEN excitedness END) Q1_ceil,
+       max(CASE WHEN exc_quart = 3 THEN excitedness END) Q3_ceil
 from temp t join temp2 t2 on t.id = t2.id;
 
-/* (3.04b) Categorising artists from (3.01) under the criteria in (3.04), alongside averages at the aggregate level of both "artists in (3.01)" and the overall population (Top 50 presence): */
+/* (2.04b) Categorising artists from (2.01) under the criteria in (2.04), alongside averages at the aggregate level of both "artists in (2.01) aka 'best artists'" and the overall population (Top 50 presence): */
 
 WITH temp AS (
     SELECT id,
@@ -335,14 +312,19 @@ SELECT t4.top_artists,
        spotifydata s ON s.id = t4.id
  GROUP BY 1,
           2
- ORDER BY 2 DESC;
+ ORDER BY 3 DESC;
 
-/* Comments for (3):
-- */
+/* Comments for (2):
+    - There is no strong indication that the 'best artists' produce music which is markedly more 'excitable' than that by others in this list.
+    Under the first, arguably more lenient, definition of 'excitedness', 5/10 produce music which is 'mixed' in this regard.
+    Under the more stringent definition, 7 are 'mixed', and the subset average score is 1.92 - highly comparable to the population average of 1.86
+    - It is important to note that this analysis concerns a small subset (of 'best artists') from an already limited pool (Top 50 songs in 2021).
+    It is indeed very plausible that the music of said best artists is stylistically very similar to that of their peers.
+    */
 
-/* (4) Practicing window functions by  investigating excitedness of tracks tranched by popularity: */
+/* (3) Practicing window functions by  investigating excitedness of tracks tranched by popularity: */
 
-/* (4a): */
+/* (3.01-a): */
 
 WITH temp AS (
     SELECT track_name,
@@ -359,7 +341,7 @@ SELECT CASE WHEN popularity_rank BETWEEN 1 AND 17 THEN '1 - 17' WHEN popularity_
        spotifydata s ON t.tracK_name = s.track_name
  GROUP BY 1;
  
-/* (4b) Alternative: */
+/* (3.01-b) Alternative: */
 
 WITH temp AS (
     SELECT track_name,

@@ -1,12 +1,14 @@
-/* This project investigates various aspects of a digital media store (https://docs.yugabyte.com/preview/sample-data/chinook/#install-the-chinook-sample-database). */
+/* This project investigates various aspects of a digital media store, "Chinook". (https://docs.yugabyte.com/preview/sample-data/chinook/#install-the-chinook-sample-database). */
 
-/* (1) Distinct billing countries: */
+/* (1) Queries done without direction, mainly just for practice: */
+
+/* (1.01) Distinct billing countries: */
 
 SELECT DISTINCT billingcountry
   FROM invoices
  ORDER BY 1;
 
-/* (2) Customers from Brazil, with their full name in a single column: */
+/* (1.02) Customers from Brazil, with their full name in a single column: */
 
 SELECT (firstname || ' ' || lastname) cust_full_name,
        customerid,
@@ -14,7 +16,7 @@ SELECT (firstname || ' ' || lastname) cust_full_name,
   FROM customers
  WHERE country = 'Brazil';
  
-/* (3) Brazilian customers and their invoices: */
+/* (1.03) Brazilian customers and their invoices: */
 
 SELECT customerid,
        firstname,
@@ -27,19 +29,7 @@ SELECT customerid,
        invoices inv ON cust.customerid = inv.customerid
  WHERE country = 'Brazil';
  
-/* (4) Invoices associated with each sales agent: */
-
-SELECT employeeid,
-       emp.firstname,
-       emp.lastname,
-       invoiceid
-  FROM employees emp
-       JOIN
-       customers cust ON emp.employeeid = cust.supportrepid
-       JOIN
-       invoices inv ON cust.customerid = inv.customerid;
-       
-/* (5) Employees who do not make sales (owing to their job function): */
+/* (1.04) Employees who do not make sales (owing to their job function): */
 
 SELECT count(customerid),
        employeeid,
@@ -49,10 +39,27 @@ SELECT count(customerid),
        employees emp ON customers.supportrepid = emp.employeeid
  GROUP BY 2
 HAVING count(customerid) = 0;
-        
-/* (6) Customer and employee details associated with all invoices: */
 
-SELECT cust.customerid cust_id,
+/* (1.05) Employees and their managers - practice of self-joins: */
+
+SELECT e1.employeeid emp_id,
+       e1.firstname emp_first,
+       e1.lastname emp_last,
+       e1.title emp_title,
+       e2.employeeid managed_by,
+       e2.title manager_title,
+       e2.firstname manager_first,
+       e2.lastname manager_last
+  FROM employees e1
+       LEFT JOIN
+       employees e2 ON e1.reportsto = e2.employeeid;
+
+/* (2) Focus on invoices, with a view to investigating relative employee performances: */
+        
+/* (2.01) Customer and employee details associated with all invoices: */
+
+SELECT invoiceid,
+       cust.customerid cust_id,
        cust.firstname cust_first,
        cust.lastname cust_last,
        cust.country cust_country,
@@ -65,36 +72,8 @@ SELECT cust.customerid cust_id,
        employees emp ON cust.supportrepid = emp.employeeid
        JOIN
        invoices inv ON cust.customerid = inv.customerid;
-
-/* (7) Total invoice amounts charged to each customer: */
- 
-SELECT cust.customerid cust_id,
-       cust.firstname cust_first,
-       cust.lastname cust_last,
-       sum(inv.total) cust_total
-  FROM customers cust
-       LEFT JOIN
-       invoices inv ON cust.customerid = inv.customerid
- GROUP BY 1,
-          2,
-          3;
        
-/* (8) Total invoice amounts charged to each customer with even-numbered ID and who spent at least $40.00: */
-   
-SELECT inv.customerid cust_id,
-       firstname cust_first,
-       lastname cust_last,
-       sum(total) cust_total
-  FROM customers cust
-       LEFT JOIN
-       invoices inv ON cust.customerid = inv.customerid
- WHERE inv.customerid % 2 = 0
- GROUP BY 1,
-          2,
-          3
-HAVING sum(total) >= 40;
-     
-/* (8) Total invoice amounts adminstered by each employee: */
+/* (2.02) Total invoice amounts adminstered by each employee: */
 
 SELECT emp.employeeid emp_id,
        emp.firstname emp_first,
@@ -108,8 +87,8 @@ SELECT emp.employeeid emp_id,
  GROUP BY 1,
           2,
           3;
-          
-/* (9) Total invoice amounts adminstered by each employee, broken down by customers charge to: */
+
+/* (2.03) Total invoice amounts adminstered by each employee, broken down by customers charge to: */
 
 SELECT DISTINCT emp.employeeid emp_id,
                 emp.firstname emp_first,
@@ -126,14 +105,80 @@ SELECT DISTINCT emp.employeeid emp_id,
        JOIN
        invoices inv ON cust.customerid = inv.customerid;
        
-/* (10) Total invoice amounts per customer country (billing country): */
+/* (2.04) Average sales per customer relationship for each employee: */
 
-SELECT billingcountry,
-       round(sum(total), 2) sales_to_country
-  FROM invoices
+WITH temp AS (
+    SELECT cust.customerid,
+           emp.employeeid,
+           sum(inv.total) OVER (PARTITION BY emp.employeeid,
+           cust.customerid) emp_cust_rev
+      FROM customers cust
+           JOIN
+           employees emp ON cust.supportrepid = emp.employeeid
+           JOIN
+           invoices inv ON cust.customerid = inv.customerid
+)
+SELECT emp.employeeid emp_id,
+       emp.firstname emp_first,
+       emp.lastname emp_last,
+       avg(emp_cust_rev) 
+  FROM temp
+       JOIN
+       employees emp ON temp.employeeid = emp.employeeid
+       JOIN
+       customers cust ON cust.supportrepid = emp.employeeid
  GROUP BY 1;
+
+/* (2.05) Number of transcacting customers per sales agent: */
+
+SELECT emp.employeeid emp_id,
+       emp.firstname emp_first,
+       emp.lastname emp_last,
+       count(DISTINCT cust.customerid) num_custs
+  FROM employees emp
+       JOIN
+       customers cust ON emp.employeeid = cust.supportrepid
+ GROUP BY 1,
+          2,
+          3;
+
+/* (2.06) Number of transactions extracted from each client for each sales rep (col3),
+ average transactions extracted per client per employee (col4),
+ and average transactions per client for employees overall: */
+
+WITH temp AS (
+    SELECT emp.firstname,
+           emp.lastname,
+           emp.employeeid,
+           inv.customerid,
+           COUNT(inv.invoiceid) AS inv_per_pair
+      FROM invoices inv
+           JOIN
+           customers cust ON inv.customerid = cust.customerid
+           JOIN
+           employees emp ON cust.supportrepid = emp.employeeid
+     GROUP BY 3,
+              4
+)
+SELECT employeeid,
+       firstname,
+       lastname,
+       customerid,
+       inv_per_pair,
+       AVG(inv_per_pair) OVER (PARTITION BY t.employeeid) avg_inv_per_cust_per_emp,
+       AVG(inv_per_pair) OVER () overall_avg_inv_per_cust
+  FROM temp t;
+
+/* Comments for (2):
+    - Jane Peacock is the top  performer, and this is due to her serving more (21) customers than her peers (20, 18).
+    - I.e. she does not extract more sales revenue per customer (range: 38.78 to 40.01),
+    not more invididual transactions per customer sales (in fact, marginally, she has fewer invoices per customer).
+          
+
+       
+/* (3) Focus on invoices, especially the relation between particular employees and particular billing countries: */
  
-/* (11) Countries and employees associated with all invoices: */
+/* (3.01) Countries and employees associated with all invoices: */
 
 SELECT billingcountry,
        employeeid,
@@ -146,15 +191,16 @@ SELECT billingcountry,
        customers cust ON inv.customerid = cust.customerid
        JOIN
        employees emp ON cust.supportrepid = emp.employeeid;
-
-/* (12) Invoice amounts charged per country: */
+       
+/* (3.02) Total invoice amounts per billing country: */
 
 SELECT billingcountry,
-       sum(total) sales_to_country
+       round(sum(total), 2) sales_to_country
   FROM invoices
  GROUP BY 1;
+ 
 
-/* (13) Invoice amounts charged per country per employee: */
+/* (3.03) Invoice amounts charged per country per employee: */
 
 SELECT billingcountry,
        employeeid,
@@ -171,15 +217,13 @@ SELECT billingcountry,
           3,
           4;
 
-
-/* (14) Invoice amounts chared per country per employee, alongside total charged to each country overall:  */
+/* (3.04) Invoice amounts chared per country per employee, alongside total charged to each country overall:  */
 
 SELECT DISTINCT billingcountry,
                 employeeid,
                 emp.firstname emp_first,
                 emp.lastname emp_last,
-                sum(inv.total) OVER (PARTITION BY billingcountry,
-                employeeid) country_emp_pair_total,
+                sum(inv.total) OVER (PARTITION BY billingcountry, employeeid) country_emp_pair_total,
                 sum(inv.total) OVER (PARTITION BY billingcountry) country_total
   FROM invoices inv
        JOIN
@@ -187,7 +231,37 @@ SELECT DISTINCT billingcountry,
        JOIN
        employees emp ON cust.supportrepid = emp.employeeid;
 
-/* (15) Invoice line IDs alongside associated purchased track name and artist name: */
+/* (3.05) Repeat (3.04) plus % contriubtion of employees to each country's total:  */
+
+WITH temp AS (
+    SELECT DISTINCT billingcountry,
+                    employeeid,
+                    emp.firstname emp_first,
+                    emp.lastname emp_last,
+                    sum(inv.total) OVER (PARTITION BY billingcountry,
+                    employeeid) country_emp_pair_total,
+                    sum(inv.total) OVER (PARTITION BY billingcountry) country_total
+      FROM invoices inv
+           JOIN
+           customers cust ON inv.customerid = cust.customerid
+           JOIN
+           employees emp ON cust.supportrepid = emp.employeeid
+)
+SELECT billingcountry,
+       employeeid,
+       emp_first,
+       emp_last,
+       round( (country_emp_pair_total / country_total) * 100, 2) AS emp_percent_contrib_per_country
+  FROM temp;
+
+/* Comments for (3):
+    -  In a majority of countries for which the servicing is sharaed, Jane takes a relatively higher contribution. The opposite for Steve.
+    Assuming that there is a purposeful mechanism through which countries are targeted, i.e. country is not a random by-product,
+    there is scope to raise discussion over relative contribution in this regard. */
+    
+/* (4) Various queries for further practice. Mainly concerned with characteristics of sales items: */
+
+/* (4.01) Invoice line IDs alongside associated purchased track name and artist name: */
 
 SELECT invoicelineid,
        tra.name track,
@@ -200,7 +274,7 @@ SELECT invoicelineid,
        JOIN
        artists art ON alb.artistid = art.artistid;
 
-/* (16) Selection of 50 tracks alongside associated artist name, album name, media type and genre: */
+/* (4.02) Selection of 50 tracks alongside associated artist name, album name, media type and genre: */
 
 SELECT tra.trackid,
        tra.name track,
@@ -219,7 +293,7 @@ SELECT tra.trackid,
        media_types med ON tra.mediatypeid = med.mediatypeid
  LIMIT 50;
        
-/* (17) Longest 50 tracks, ranked: */
+/* (4.03) Longest 50 tracks, ranked: */
 
 SELECT trackid,
        name track,
@@ -229,7 +303,7 @@ SELECT trackid,
  ORDER BY 4
  LIMIT 50;
 
-/* (18) Albums with greatest durations (total run-time), ranked: */
+/* (4.04) Albums with greatest durations (total run-time), ranked: */
 
 SELECT alb.albumid,
        alb.title,
@@ -241,7 +315,7 @@ SELECT alb.albumid,
  GROUP BY 1, 2
  ORDER BY 4;
 
-/* (19) Classifying albums by duration: */
+/* (4.05) Classifying albums by duration: */
 
 WITH temp AS (
     SELECT alb.albumid alb_id,
@@ -262,7 +336,7 @@ SELECT alb_id,
        THEN 'avg_or_more_duration' ELSE 'shorter_than_avg' END AS duration_category
   FROM temp;
   
-/* (20) Number of albums in certain bands of durations: */
+/* (4.06) Number of albums in certain bands of durations: */
 
 WITH temp AS (
     SELECT alb.albumid alb_id,

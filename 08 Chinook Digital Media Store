@@ -1,0 +1,154 @@
+/* This project concerns a semi-fictional dataset of musicians and their output.
+The main objective is to practice joins. */
+
+/* This project uses the following data: */
+
+drop table if exists artists;
+drop table if exists songs;
+drop table if exists collaborators;
+
+CREATE TABLE artists
+    (id INTEGER PRIMARY KEY AUTOINCREMENT,
+    stage_name TEXT,
+    birth_name TEXT,
+    no_albums INTEGER,
+    no_grammies INTEGER,
+    no_top_100_songs INTEGER);
+    
+INSERT INTO artists 
+    VALUES (1, "Ye", "Kanye West", 10, 23, 30);
+INSERT INTO artists 
+    VALUES (2, "Britney Spears", "Britney Spears", 7, 2, 14);
+INSERT INTO artists 
+    VALUES (3, "Nas", "Nasir Jones", 7, 3, 4);
+INSERT INTO artists 
+    VALUES (4, "Madonna", "Madonna Ciccone", 15, 7, 35);
+INSERT INTO artists
+    VALUES (5, "Freddie Gibbs", "Freddie Gibbs", 8, 0, 1);
+INSERT INTO artists 
+    VALUES (6, "Grimes", "Claire Boucher", 5, 1, 6);
+INSERT INTO artists 
+    VALUES (7, "Big KRIT", "Justin Scott", 6, 0, 0);
+INSERT INTO artists 
+    VALUES (8, "Natalia Lafourcade", "Natalia Lafourcade", 8, 4, 2);
+    
+CREATE TABLE songs
+    (id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT,
+    artist_id INTEGER,
+    feat_artist_id INTEGER,
+    release_year INTEGER,
+    peak_chart INTEGER);
+    
+INSERT INTO songs
+    VALUES (1, "I wonder", 1, 3, 2006, 5);
+INSERT INTO songs    
+    VALUES (2, "Fictional Song", 1, NULL, 2008, 19);
+INSERT INTO songs
+    VALUES (3, "Made up Song", 1, 2, 2010, 100);
+INSERT INTO songs
+    VALUES (4, "Kill the Lights", 2, NULL, 2008, 14);
+INSERT INTO songs
+    VALUES (5, "Fictitious Song", 2, NULL, 2001, 14);
+INSERT INTO songs
+    VALUES (6, "Song That I Made Up", 2, NULL, 2002, 18);
+INSERT INTO songs
+    VALUES (7, "It Ain't Hard to Tell", 3, NULL, 1994, 25);
+INSERT INTO songs
+    VALUES (8, "Song That is Fictional", 3,NULL,  2020, 167);
+INSERT INTO songs
+    VALUES (9, "4 Minutes", 4, NULL, 2006, 11);
+INSERT INTO songs
+    VALUES (10, "Song That is not IRL", 4, 3, 2013, 100);
+INSERT INTO songs
+    VALUES (11, "Harold's", 5, 2014, NULL, 232);
+INSERT INTO songs
+    VALUES (12, "Song Not Legit", 5, 6, 2009, 314);
+INSERT INTO songs
+    VALUES (13, "ReaLiTi", 6, 2015, NULL, 45);
+INSERT INTO songs
+    VALUES (14, "Fake Song", 6, 2019, 10, 98);
+INSERT INTO songs
+    VALUES (15, "Imaginary Song", 15, NULL, 2015, 1);
+INSERT INTO songs
+    VALUES (16, "Non-existent Song", 16, NULL, 2014, 50);
+INSERT INTO songs
+    VALUES (17, "Unrealised Song", 17, NULL, 2023, 1);
+    
+CREATE TABLE collaborators
+    (id INTEGER PRIMARY KEY AUTOINCREMENT,
+    main_artist_id INTEGER,
+    feat_artist_id INTEGER);
+    
+INSERT INTO collaborators
+    VALUES (1, 1, 2);
+INSERT INTO collaborators
+    VALUES (2, 1, 3);
+INSERT INTO collaborators
+    VALUES (3, 4, 3);
+INSERT INTO collaborators
+    VALUES (4, 5, 6);
+INSERT INTO collaborators
+    VALUES (5, 6, 9);
+    
+/* The project proper: */
+    
+/* (1) Matching songs to their artists: */
+
+SELECT songs.title,
+       artists.stage_name
+  FROM songs
+       JOIN
+       artists ON artists.id = songs.artist_id;
+        
+/* (2) Songs with artists which are not in our database: */
+        
+SELECT songs.title,
+       artists.stage_name
+  FROM songs
+       LEFT JOIN
+       artists ON artists.id = songs.artist_id
+ WHERE artists.stage_name IS NULL;
+    
+/* (3) Artists with no songs which are in our database: */
+        
+SELECT artists.stage_name,
+       songs.title
+  FROM artists
+       LEFT JOIN
+       songs ON artists.id = songs.artist_id
+ WHERE songs.title IS NULL;
+    
+/* (4) Artists within our data who have collaborated: */
+
+SELECT a.stage_name main,
+       b.stage_name feat
+  FROM collaborators cols
+       JOIN
+       artists a ON a.id = cols.main_artist_id
+       JOIN
+       artists b ON b.id = cols.feat_artist_id;
+
+/* (4) Artists who have collaborated, including with artists not in our data: */
+
+SELECT a.stage_name,
+       b.stage_name
+  FROM collaborators cols
+       LEFT JOIN
+       artists a ON a.id = cols.main_artist_id
+       LEFT JOIN
+       artists b ON b.id = cols.feat_artist_id;
+        
+/* (5) Songs in our data which involved collaborations between artists in our data: */
+
+SELECT a.stage_name main_artist,
+       b.stage_name featured_artist,
+       c.title
+  FROM collaborators cols
+       JOIN
+       artists a ON a.id = cols.main_artist_id
+       JOIN
+       artists b ON b.id = cols.feat_artist_id
+       JOIN
+       songs c ON c.artist_id = cols.main_artist_id AND 
+                  c.feat_artist_id = cols.feat_artist_id;

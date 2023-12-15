@@ -1,5 +1,5 @@
-/* This project uses data from:
-https://www.kaggle.com/datasets/equinxx/spotify-top-50-songs-in-2021 */
+/* This project uses data from (https://www.kaggle.com/datasets/equinxx/spotify-top-50-songs-in-2021),
+which highlights characteristics of the Top 50 most streamed songs on Spotify in 2021. */
 
 DROP TABLE IF EXISTS SpotifyData;
 
@@ -27,6 +27,8 @@ time_signature integer NOT NULL );
 
 /* (1) Musical characteristics of tracks in general: */
 
+/* (1.01): */
+
 SELECT avg(danceability),
        avg(energy),
        avg(loudness),
@@ -35,15 +37,38 @@ SELECT avg(danceability),
        avg(valence) 
   FROM spotifydata;
 
-/* (2) Distribution of tracks by major vs minor: */
+/* (1.02) Distribution of tracks by major vs minor: */
 
 SELECT song_mode,
        count( * ) 
   FROM spotifydata
  GROUP BY 1
  ORDER BY 2 DESC;
+ 
+/* Comments for (1):
+    - */
 
-/* (3) Artists with multiple placements in Top 50: */
+/* (2) As practice, displaying tracks with explicit rankings: */
+
+/* (2.01) Dense rank: */
+
+SELECT track_name,
+       artist_name,
+       popularity,
+       dense_rank() OVER (ORDER BY popularity DESC) popularity_dense_rank
+  FROM spotifydata;
+  
+/* (2.02) Rank: */
+
+SELECT track_name,
+       artist_name,
+       popularity,
+       rank() OVER (ORDER BY popularity DESC) popularity_rank
+  FROM spotifydata;
+
+/* (3) Investigating characteristics of music by artists with multiple Top 50 placements: */
+
+/* (3.01) Identifying artists with multiple placements in Top 50: */
 
 SELECT artist_name,
        count( * ) appearences,
@@ -52,7 +77,7 @@ SELECT artist_name,
  GROUP BY 1
  ORDER BY 2 DESC;
 
-/* (4) 'Excitedness' of music by artists from (3): */
+/* (3.02) Extracting factors contributing to the 'excitedness' of music by artists from (3.01): */
 
 SELECT artist_name,
        avg(popularity),
@@ -65,115 +90,259 @@ SELECT artist_name,
 HAVING count(artist_name) > 1
  ORDER BY 2 DESC;
  
-/* (5) Categorising 'excitedness' of music by artists from (3): */
-
-SELECT artist_name,
-       avg(popularity),
-       count(artist_name) appearances,
-       avg(danceability) - (
-                               SELECT avg(danceability) 
-                                 FROM spotifydata
-                           )
-       AS dance_diff,
-       avg(energy) - (
-                         SELECT avg(energy) 
-                           FROM spotifydata
-                     )
-       AS energy_diff,
-       avg(valence) - (
-                          SELECT avg(valence) 
-                            FROM spotifydata
-                      )
-       AS valence_diff,
-       CASE WHEN (avg(danceability) - (
-                                          SELECT avg(danceability) 
-                                            FROM spotifydata
-                                      )
-                 ) > 0 AND 
-                 (avg(energy) - (
-                                    SELECT avg(energy) 
-                                      FROM spotifydata
-                                )
-                 ) > 0 AND 
-                 (avg(valence) - (
-                                     SELECT avg(valence) 
-                                       FROM spotifydata
-                                 )
-                 ) > 0 THEN 'pumped' WHEN (avg(danceability) - (
-                                                                   SELECT avg(danceability) 
-                                                                     FROM spotifydata
-                                                               )
-                                          ) < 0 AND 
-                                          (avg(energy) - (
-                                                             SELECT avg(energy) 
-                                                               FROM spotifydata
-                                                         )
-                                          ) < 0 AND 
-                                          (avg(valence) - (
-                                                              SELECT avg(valence) 
-                                                                FROM spotifydata
-                                                          )
-                                          ) < 0 THEN 'subdued' ELSE 'mixed' END AS excitment_factor
-  FROM spotifydata
- GROUP BY 1
-HAVING count(artist_name) > 1
- ORDER BY 2 DESC;
-
-/* (5.01) Alternative: */
+/* (3.03-a) Categorising 'excitedness' of music by artists from (3.01)
+with the criteria that
+each 'avg-relevant-characteristic-per-artist' must exceed the overall/population average for that same characteristic to be considered 'relatively pumped',
+vice versa for 'relatively subdued',
+and self-explanatory for 'mixed': */
 
 WITH temp AS (
-    SELECT danceability - (
-                              SELECT avg(danceability) 
+    SELECT id,
+           count(artist_name) appearances,
+           avg(danceability) - (
+                                   SELECT avg(danceability) 
+                                     FROM spotifydata
+                               )
+           AS dance_diff,
+           avg(energy) - (
+                             SELECT avg(energy) 
+                               FROM spotifydata
+                         )
+           AS energy_diff,
+           avg(valence) - (
+                              SELECT avg(valence) 
                                 FROM spotifydata
                           )
-           dance_diff,
-           energy - (
-                        SELECT avg(energy) 
-                          FROM spotifydata
-                    )
-           energy_diff,
-           valence - (
-                         SELECT avg(valence) 
-                           FROM spotifydata
-                     )
-           valence_diff,
-           popularity,
-           artist_name
-      FROM spotifydata
+           AS valence_diff
+      FROM spotifydata spot
+     GROUP BY spot.artist_name
+    HAVING appearances > 1
 )
-SELECT artist_name,
-       count( * ) appearances,
+SELECT spot.artist_name,
        avg(popularity),
+       appearances,
        dance_diff,
        energy_diff,
        valence_diff,
-       CASE WHEN dance_diff > 0 AND 
-                 energy_diff > 0 AND 
-                 valence_diff > 0 THEN 'pumped' WHEN dance_diff < 0 AND 
-                                                     energy_diff < 0 AND 
-                                                     valence_diff < 0 THEN 'subdued' ELSE 'mixed' END excitement_factor
+       CASE WHEN (dance_diff > 0 AND 
+                  energy_diff > 0 AND 
+                  valence_diff > 0) THEN 'relatively pumped' WHEN (dance_diff < 0 AND 
+                                                                   energy_diff < 0 AND 
+                                                                   valence_diff < 0) THEN 'relatively subdued' ELSE 'mixed' END AS exc_cat1
   FROM temp
+       JOIN
+       spotifydata spot ON temp.id = spot.id
  GROUP BY 1
-HAVING count(artist_name) > 1
- ORDER BY 3 DESC;
+ ORDER BY 2 DESC;
  
-/* (6) Dense rank of tracks by popularity: */
+/* (3.03-b) Aggregation (count) of categories from (3.03-a): */
 
-SELECT track_name,
-       artist_name,
-       popularity,
-       dense_rank() OVER (ORDER BY popularity DESC) popularity_dense_rank
-  FROM spotifydata;
-  
-/* (7) Rank of tracks by popularity: */
+WITH temp AS (
+    SELECT id,
+           count(artist_name) appearances,
+           avg(danceability) - (
+                                   SELECT avg(danceability) 
+                                     FROM spotifydata
+                               )
+           AS dance_diff,
+           avg(energy) - (
+                             SELECT avg(energy) 
+                               FROM spotifydata
+                         )
+           AS energy_diff,
+           avg(valence) - (
+                              SELECT avg(valence) 
+                                FROM spotifydata
+                          )
+           AS valence_diff
+      FROM spotifydata spot
+     GROUP BY spot.artist_name
+    HAVING appearances > 1
+),
+temp2 AS (
+    SELECT id,
+           CASE WHEN (dance_diff > 0 AND 
+                      energy_diff > 0 AND 
+                      valence_diff > 0) THEN 'relatively pumped' WHEN (dance_diff < 0 AND 
+                                                                       energy_diff < 0 AND 
+                                                                       valence_diff < 0) THEN 'relatively subdued' ELSE 'mixed' END AS exc_cat1
+      FROM temp
+)
+SELECT spot.artist_name,
+       exc_cat1,
+       count(exc_cat1) OVER (PARTITION BY exc_cat1) num_in_exc_cat1
+  FROM temp
+       JOIN
+       spotifydata spot ON temp.id = spot.id
+       JOIN
+       temp2 ON spot.id = temp2.id
+ GROUP BY 1
+ ORDER BY 2;
 
-SELECT track_name,
-       artist_name,
-       popularity,
-       rank() OVER (ORDER BY popularity DESC) popularity_rank
-  FROM spotifydata;
+   
+/* (3.04) Now considering 'excitedness' of music by artists from (3.01)
+under a stronger criteria which dictates that the average excitedness per artist (average of summation of average of relevant characteristics per artist)
+must be in the top quartile of average excitedness aggregated over the population to be 'relatively pumped',
+in the bottom quartile for 'relatively subdued',
+and self-explanatory for 'mixed': */
 
-/* (8) 'Excitedness' of tracks tranched by poularity: */
+/* (3.04-a) Defining excitedness and identifying bounds of its lowest and highest quartiles across the population: */
+
+with temp as 
+(select id, danceability + energy + valence as excitedness from spotifydata),
+
+temp2 as
+(SELECT id,
+ntile(4) OVER (ORDER BY excitedness) exc_quart
+             FROM temp
+            ORDER BY 1)
+            
+SELECT
+max(CASE WHEN exc_quart = 1 THEN excitedness END) Q1,
+       max(CASE WHEN exc_quart = 3 THEN excitedness END) Q3
+from temp t join temp2 t2 on t.id = t2.id;
+
+/* (3.04b) Categorising artists from (3.01) under the criteria in (3.04), alongside averages at the aggregate level of both "artists in (3.01)" and the overall population (Top 50 presence): */
+
+WITH temp AS (
+    SELECT id,
+           danceability + energy + valence AS excitedness
+      FROM spotifydata
+),
+temp2 AS (
+    SELECT id,
+           ntile(4) OVER (ORDER BY excitedness) exc_quart
+      FROM temp
+     ORDER BY 1
+),
+temp3 AS (
+    SELECT DISTINCT t.id,
+                    artist_name AS best_artists,
+                    avg(excitedness) AS avg_exc_by_artist
+      FROM spotifydata s
+           JOIN
+           temp t ON s.id = t.id
+     GROUP BY artist_name
+    HAVING COUNT(artist_name) > 1
+)
+SELECT DISTINCT best_artists,
+                (
+                    SELECT max(CASE WHEN exc_quart = 1 THEN excitedness END) 
+                      FROM temp t
+                           JOIN
+                           temp2 t2 ON t.id = t2.id
+                )
+                exc_Q1_upper,
+                (
+                    SELECT max(CASE WHEN exc_quart = 3 THEN excitedness END) 
+                      FROM temp t
+                           JOIN
+                           temp2 t2 ON t.id = t2.id
+                )
+                exc_Q3_upper,
+                avg_exc_by_artist AS avg_exc_of_artist,
+                CASE WHEN avg_exc_by_artist >= (
+                                                           SELECT max(CASE WHEN exc_quart = 3 THEN excitedness END) 
+                                                             FROM temp t
+                                                                  JOIN
+                                                                  temp2 t2 ON t.id = t2.id
+                                                       )
+                THEN 'relatively pumped' WHEN avg_exc_by_artist <= (
+                                                                               SELECT max(CASE WHEN exc_quart = 1 THEN excitedness END) 
+                                                                                 FROM temp t
+                                                                                      JOIN
+                                                                                      temp2 t2 ON t.id = t2.id
+                                                                           )
+                THEN 'relatively subdued' else 'mixed' END AS exc_cat2,
+                (
+                    SELECT AVG(avg_exc_by_artist) 
+                      FROM temp3
+                )
+                AS overall_avg_exc_of_best_artists,
+                (
+                    SELECT avg(excitedness) 
+                      FROM spotifydata s
+                           LEFT JOIN
+                           temp t ON s.id = t.id
+                )
+                overall_t50_exc_avg
+  FROM temp t
+       JOIN
+       temp2 t2 ON t.id = t2.id
+       JOIN
+       temp3 t3 ON t3.id = t2.id
+       JOIN
+       spotifydata s ON t3.id = s.id
+ GROUP BY 1
+ ORDER BY 4 DESC;
+
+
+
+/* (3.04-c) Aggregation (count) of categories from (3.04-b): */
+
+WITH temp AS (
+    SELECT id,
+           danceability + energy + valence AS excitedness
+      FROM spotifydata
+),
+temp2 AS (
+    SELECT id,
+           ntile(4) OVER (ORDER BY excitedness) exc_quart
+      FROM temp
+     ORDER BY 1
+),
+temp3 AS (
+    SELECT DISTINCT t.id,
+                    artist_name AS top_artists,
+                    avg(excitedness) AS avg_exc_by_artist
+      FROM spotifydata s
+           JOIN
+           temp t ON s.id = t.id
+     GROUP BY artist_name
+    HAVING COUNT(artist_name) > 1
+),
+temp4 AS (
+    SELECT DISTINCT top_artists,
+                    id,
+                    CASE WHEN avg_exc_by_artist >= (
+                                                       SELECT max(CASE WHEN exc_quart = 3 THEN excitedness END) 
+                                                         FROM temp t
+                                                              JOIN
+                                                              temp2 t2 ON t.id = t2.id
+                                                   )
+                    THEN 'relatively pumped' WHEN avg_exc_by_artist <= (
+                                                                           SELECT max(CASE WHEN exc_quart = 1 THEN excitedness END) 
+                                                                             FROM temp t
+                                                                                  JOIN
+                                                                                  temp2 t2 ON t.id = t2.id
+                                                                       )
+                    THEN 'relatively subdued' ELSE 'mixed' END AS exc_cat
+      FROM temp3 t3
+     GROUP BY 1
+)
+SELECT t4.top_artists,
+       avg_exc_by_artist AS avg_exc_of_artist,
+       exc_cat,
+       count( * ) OVER (PARTITION BY exc_cat) num_in_exc_cat
+  FROM temp t
+       JOIN
+       temp2 t2 ON t.id = t2.id
+       JOIN
+       temp3 t3 ON t3.id = t2.id
+       JOIN
+       temp4 t4 ON t3.id = t4.id
+       JOIN
+       spotifydata s ON s.id = t4.id
+ GROUP BY 1,
+          2
+ ORDER BY 2 DESC;
+
+/* Comments for (3):
+- */
+
+/* (4) Practicing window functions by  investigating excitedness of tracks tranched by popularity: */
+
+/* (4a): */
 
 WITH temp AS (
     SELECT track_name,
@@ -190,7 +359,7 @@ SELECT CASE WHEN popularity_rank BETWEEN 1 AND 17 THEN '1 - 17' WHEN popularity_
        spotifydata s ON t.tracK_name = s.track_name
  GROUP BY 1;
  
-/* (8.01) Alternative: */
+/* (4b) Alternative: */
 
 WITH temp AS (
     SELECT track_name,

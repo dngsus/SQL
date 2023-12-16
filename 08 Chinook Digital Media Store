@@ -1,154 +1,354 @@
-/* This project concerns a semi-fictional dataset of musicians and their output.
-The main objective is to practice joins. */
+/* This project investigates various aspects of a digital media store, "Chinook". (https://docs.yugabyte.com/preview/sample-data/chinook/#install-the-chinook-sample-database). */
 
-/* This project uses the following data: */
-
-drop table if exists artists;
-drop table if exists songs;
-drop table if exists collaborators;
-
-CREATE TABLE artists
-    (id INTEGER PRIMARY KEY AUTOINCREMENT,
-    stage_name TEXT,
-    birth_name TEXT,
-    no_albums INTEGER,
-    no_grammies INTEGER,
-    no_top_100_songs INTEGER);
-    
-INSERT INTO artists 
-    VALUES (1, "Ye", "Kanye West", 10, 23, 30);
-INSERT INTO artists 
-    VALUES (2, "Britney Spears", "Britney Spears", 7, 2, 14);
-INSERT INTO artists 
-    VALUES (3, "Nas", "Nasir Jones", 7, 3, 4);
-INSERT INTO artists 
-    VALUES (4, "Madonna", "Madonna Ciccone", 15, 7, 35);
-INSERT INTO artists
-    VALUES (5, "Freddie Gibbs", "Freddie Gibbs", 8, 0, 1);
-INSERT INTO artists 
-    VALUES (6, "Grimes", "Claire Boucher", 5, 1, 6);
-INSERT INTO artists 
-    VALUES (7, "Big KRIT", "Justin Scott", 6, 0, 0);
-INSERT INTO artists 
-    VALUES (8, "Natalia Lafourcade", "Natalia Lafourcade", 8, 4, 2);
-    
-CREATE TABLE songs
-    (id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT,
-    artist_id INTEGER,
-    feat_artist_id INTEGER,
-    release_year INTEGER,
-    peak_chart INTEGER);
-    
-INSERT INTO songs
-    VALUES (1, "I wonder", 1, 3, 2006, 5);
-INSERT INTO songs    
-    VALUES (2, "Fictional Song", 1, NULL, 2008, 19);
-INSERT INTO songs
-    VALUES (3, "Made up Song", 1, 2, 2010, 100);
-INSERT INTO songs
-    VALUES (4, "Kill the Lights", 2, NULL, 2008, 14);
-INSERT INTO songs
-    VALUES (5, "Fictitious Song", 2, NULL, 2001, 14);
-INSERT INTO songs
-    VALUES (6, "Song That I Made Up", 2, NULL, 2002, 18);
-INSERT INTO songs
-    VALUES (7, "It Ain't Hard to Tell", 3, NULL, 1994, 25);
-INSERT INTO songs
-    VALUES (8, "Song That is Fictional", 3,NULL,  2020, 167);
-INSERT INTO songs
-    VALUES (9, "4 Minutes", 4, NULL, 2006, 11);
-INSERT INTO songs
-    VALUES (10, "Song That is not IRL", 4, 3, 2013, 100);
-INSERT INTO songs
-    VALUES (11, "Harold's", 5, 2014, NULL, 232);
-INSERT INTO songs
-    VALUES (12, "Song Not Legit", 5, 6, 2009, 314);
-INSERT INTO songs
-    VALUES (13, "ReaLiTi", 6, 2015, NULL, 45);
-INSERT INTO songs
-    VALUES (14, "Fake Song", 6, 2019, 10, 98);
-INSERT INTO songs
-    VALUES (15, "Imaginary Song", 15, NULL, 2015, 1);
-INSERT INTO songs
-    VALUES (16, "Non-existent Song", 16, NULL, 2014, 50);
-INSERT INTO songs
-    VALUES (17, "Unrealised Song", 17, NULL, 2023, 1);
-    
-CREATE TABLE collaborators
-    (id INTEGER PRIMARY KEY AUTOINCREMENT,
-    main_artist_id INTEGER,
-    feat_artist_id INTEGER);
-    
-INSERT INTO collaborators
-    VALUES (1, 1, 2);
-INSERT INTO collaborators
-    VALUES (2, 1, 3);
-INSERT INTO collaborators
-    VALUES (3, 4, 3);
-INSERT INTO collaborators
-    VALUES (4, 5, 6);
-INSERT INTO collaborators
-    VALUES (5, 6, 9);
-    
-/* The project proper: */
-    
-/* (1) Matching songs to their artists: */
-
-SELECT songs.title,
-       artists.stage_name
-  FROM songs
-       JOIN
-       artists ON artists.id = songs.artist_id;
+/* (1) Focus on invoices, primarily with a view to investigating relative employee performances: */
         
-/* (2) Songs with artists which are not in our database: */
-        
-SELECT songs.title,
-       artists.stage_name
-  FROM songs
-       LEFT JOIN
-       artists ON artists.id = songs.artist_id
- WHERE artists.stage_name IS NULL;
+/* (1.01) Customer and employee details associated with all invoices: */
+
+SELECT invoiceid,
+       cust.customerid cust_id,
+       cust.firstname cust_first,
+       cust.lastname cust_last,
+       cust.country cust_country,
+       emp.employeeid emp_id,
+       emp.firstname emp_first,
+       emp.lastname emp_last,
+       inv.total
+  FROM customers cust
+       JOIN
+       employees emp ON cust.supportrepid = emp.employeeid
+       JOIN
+       invoices inv ON cust.customerid = inv.customerid;
+       
+/* (1.02) Total invoice amounts adminstered by each employee: */
+
+SELECT emp.employeeid emp_id,
+       emp.firstname emp_first,
+       emp.lastname emp_last,
+       round(sum(inv.total), 2) sales_rev 
+  FROM employees emp
+       JOIN
+       customers cust ON emp.employeeid = cust.supportrepid
+       JOIN
+       invoices inv ON cust.customerid = inv.customerid
+ GROUP BY 1,
+          2,
+          3;
+
+/* (1.03) Total invoice amounts adminstered by each employee, broken down by customers charge to: */
+
+SELECT DISTINCT emp.employeeid emp_id,
+                emp.firstname emp_first,
+                emp.lastname emp_last,
+                cust.customerid cust_id,
+                cust.firstname cust_first,
+                cust.lastname cust_last,
+                round(sum(inv.total) OVER (PARTITION BY emp.employeeid,
+                      cust.customerid), 2) emp_cust_rev,
+                round(sum(inv.total) OVER (PARTITION BY emp.employeeid), 2) emp_net_rev
+  FROM customers cust
+       JOIN
+       employees emp ON cust.supportrepid = emp.employeeid
+       JOIN
+       invoices inv ON cust.customerid = inv.customerid;
+       
+/* (1.04) Average invoice size per customer relationship for each employee: */
+
+WITH temp AS (
+    SELECT cust.customerid,
+           emp.employeeid,
+           sum(inv.total) OVER (PARTITION BY emp.employeeid,
+           cust.customerid) emp_cust_rev
+      FROM customers cust
+           JOIN
+           employees emp ON cust.supportrepid = emp.employeeid
+           JOIN
+           invoices inv ON cust.customerid = inv.customerid
+)
+SELECT emp.employeeid emp_id,
+       emp.firstname emp_first,
+       emp.lastname emp_last,
+       avg(emp_cust_rev) 
+  FROM temp
+       JOIN
+       employees emp ON temp.employeeid = emp.employeeid
+       JOIN
+       customers cust ON cust.supportrepid = emp.employeeid
+ GROUP BY 1;
+
+/* (1.05) Number of transcacting customers per sales agent: */
+
+SELECT emp.employeeid emp_id,
+       emp.firstname emp_first,
+       emp.lastname emp_last,
+       count(DISTINCT cust.customerid) num_custs
+  FROM employees emp
+       JOIN
+       customers cust ON emp.employeeid = cust.supportrepid
+ GROUP BY 1,
+          2,
+          3;
+
+/* (1.06) Number of transactions extracted from each client for each sales rep (col3),
+ average transactions extracted per client per employee (col4),
+ and average transactions per client for employees overall: */
+
+WITH temp AS (
+    SELECT emp.firstname,
+           emp.lastname,
+           emp.employeeid,
+           inv.customerid,
+           COUNT(inv.invoiceid) AS inv_of_pair
+      FROM invoices inv
+           JOIN
+           customers cust ON inv.customerid = cust.customerid
+           JOIN
+           employees emp ON cust.supportrepid = emp.employeeid
+     GROUP BY 3,
+              4
+)
+SELECT employeeid,
+       firstname,
+       lastname,
+       customerid,
+       inv_of_pair,
+       AVG(inv_of_pair) OVER (PARTITION BY t.employeeid) avg_inv_per_cust_per_emp,
+       AVG(inv_of_pair) OVER () overall_avg_inv_per_cust
+  FROM temp t;
+
+/* Comments for (1):
+    - Jane Peacock is the top  performer, and this is due to her serving more (21) customers than her peers (20, 18).
+    - I.e. she does not extract more sales revenue per customer (she sits in the middle of the range: 38.78 to 40.01),
+    not more invididual transactions per customer sales (in fact, marginally, she has smaller invoices per customer).
+          
+       
+/* (2) Focus on invoices, especially the relation between particular employees and particular billing countries: */
+ 
+/* (2.01) Countries and employees associated with all invoices: */
+
+SELECT billingcountry,
+       employeeid,
+       emp.firstname emp_first,
+       emp.lastname emp_last,
+       invoiceid,
+       total
+  FROM invoices inv
+       JOIN
+       customers cust ON inv.customerid = cust.customerid
+       JOIN
+       employees emp ON cust.supportrepid = emp.employeeid;
+       
+/* (2.02) Total invoice amounts per billing country: */
+
+SELECT billingcountry,
+       round(sum(total), 2) sales_to_country
+  FROM invoices
+ GROUP BY 1;
+ 
+
+/* (2.03) Invoice amounts charged per country per employee: */
+
+SELECT billingcountry,
+       employeeid,
+       emp.firstname emp_first,
+       emp.lastname emp_last,
+       sum(total) country_emp_total
+  FROM invoices inv
+       JOIN
+       customers cust ON inv.customerid = cust.customerid
+       JOIN
+       employees emp ON cust.supportrepid = emp.employeeid
+ GROUP BY 1,
+          2,
+          3,
+          4;
+
+
+/* (2.04) Invoice amounts chared per country per employee, alongside total charged to each country overall:  */
+
+SELECT DISTINCT billingcountry,
+                employeeid,
+                emp.firstname emp_first,
+                emp.lastname emp_last,
+                sum(inv.total) OVER (PARTITION BY billingcountry, employeeid) country_emp_pair_total,
+                sum(inv.total) OVER (PARTITION BY billingcountry) country_total
+  FROM invoices inv
+       JOIN
+       customers cust ON inv.customerid = cust.customerid
+       JOIN
+       employees emp ON cust.supportrepid = emp.employeeid;
+
+/* (2.05) Repeat (2.04) plus % contriubtion of employees to each country's total:  */
+
+WITH temp AS (
+    SELECT DISTINCT billingcountry,
+                    employeeid,
+                    emp.firstname emp_first,
+                    emp.lastname emp_last,
+                    sum(inv.total) OVER (PARTITION BY billingcountry,
+                    employeeid) country_emp_pair_total,
+                    sum(inv.total) OVER (PARTITION BY billingcountry) country_total
+      FROM invoices inv
+           JOIN
+           customers cust ON inv.customerid = cust.customerid
+           JOIN
+           employees emp ON cust.supportrepid = emp.employeeid
+)
+SELECT billingcountry,
+       employeeid,
+       emp_first,
+       emp_last,
+       round( (country_emp_pair_total / country_total) * 100, 2) AS emp_percent_contrib_per_country
+  FROM temp;
+
+/* Comments for (2):
+    -  In a majority of countries for which the servicing is sharaed, Jane takes a relatively higher contribution. The opposite for Steve.
+    Assuming that there is a purposeful mechanism through which countries are targeted, i.e. country is not a random attribute of deals,
+    there is scope to raise discussion over relative contribution in this regard. */
     
-/* (3) Artists with no songs which are in our database: */
-        
-SELECT artists.stage_name,
-       songs.title
-  FROM artists
+/* (3) Various queries for further practice. Mainly concerned with characteristics of sales items: */
+
+/* (3.01) Invoice line IDs alongside associated purchased track name and artist name: */
+
+SELECT invoicelineid,
+       tra.name track,
+       art.name album
+  FROM invoice_items invit
+       JOIN
+       tracks tra ON invit.trackid = tra.trackid
+       JOIN
+       albums alb ON tra.albumid = alb.albumid
+       JOIN
+       artists art ON alb.artistid = art.artistid;
+
+/* (3.02) Selection of 50 tracks alongside associated artist name, album name, media type and genre: */
+
+SELECT tra.trackid,
+       tra.name track,
+       art.name artist,
+       alb.title album,
+       med.name media_type,
+       gen.name genre
+  FROM tracks tra
+       JOIN
+       artists art ON alb.artistid = art.artistid
+       JOIN
+       albums alb ON tra.albumid = alb.albumid
+       JOIN
+       genres gen ON tra.genreid = gen.genreid
+       JOIN
+       media_types med ON tra.mediatypeid = med.mediatypeid
+ LIMIT 50;
+       
+/* (3.03) Longest 50 tracks, ranked: */
+
+SELECT trackid,
+       name track,
+       milliseconds duration,
+       dense_rank() OVER (ORDER BY milliseconds DESC) rank_by_duration
+  FROM tracks
+ ORDER BY 4
+ LIMIT 50;
+
+/* (3.04) Albums with greatest durations (total run-time), ranked: */
+
+SELECT alb.albumid,
+       alb.title,
+       sum(milliseconds) duration,
+       dense_rank() OVER (ORDER BY sum(milliseconds) DESC) rank_by_duration
+  FROM albums alb
+       JOIN
+       tracks tra ON alb.albumid = tra.albumid
+ GROUP BY 1, 2
+ ORDER BY 4;
+
+/* (3.05) Classifying albums by duration: */
+
+WITH temp AS (
+    SELECT alb.albumid alb_id,
+           alb.title alb_title,
+           sum(milliseconds) duration
+      FROM albums alb
+           JOIN
+           tracks tra ON alb.albumid = tra.albumid
+     GROUP BY 1,
+              2
+)
+SELECT alb_id,
+       alb_title,
+       CASE WHEN duration >= (
+                                 SELECT avg(duration) 
+                                   FROM temp
+                             )
+       THEN 'avg_or_more_duration' ELSE 'shorter_than_avg' END AS duration_category
+  FROM temp;
+  
+/* (3.06) Number of albums in certain bands of durations: */
+
+WITH temp AS (
+    SELECT alb.albumid alb_id,
+           alb.title alb_title,
+           sum(milliseconds) duration
+      FROM albums alb
+           JOIN
+           tracks tra ON alb.albumid = tra.albumid
+     GROUP BY 1,
+              2
+)
+SELECT count(alb_id) FILTER (WHERE duration BETWEEN 0 AND 3000000) AS shorter,
+       count(alb_id) FILTER (WHERE 3000000 < duration <= 6000000) AS medium,
+       count(alb_id) FILTER (WHERE 6000000 > duration) AS long
+  FROM temp;
+  
+/* (4) Queries done without direction, mainly just for practice: */
+
+/* (4.01) Distinct billing countries: */
+
+SELECT DISTINCT billingcountry
+  FROM invoices
+ ORDER BY 1;
+
+/* (4.02) Customers from Brazil, with their full name in a single column: */
+
+SELECT (firstname || ' ' || lastname) cust_full_name,
+       customerid,
+       country
+  FROM customers
+ WHERE country = 'Brazil';
+ 
+/* (4.03) Brazilian customers and their invoices: */
+
+SELECT customerid,
+       firstname,
+       lastname,
+       invoiceid,
+       invoicedate,
+       total
+  FROM customers cust
        LEFT JOIN
-       songs ON artists.id = songs.artist_id
- WHERE songs.title IS NULL;
-    
-/* (4) Artists within our data who have collaborated: */
+       invoices inv ON cust.customerid = inv.customerid
+ WHERE country = 'Brazil';
+ 
+/* (4.04) Employees who do not make sales (owing to their job function): */
 
-SELECT a.stage_name main,
-       b.stage_name feat
-  FROM collaborators cols
-       JOIN
-       artists a ON a.id = cols.main_artist_id
-       JOIN
-       artists b ON b.id = cols.feat_artist_id;
+SELECT count(customerid),
+       employeeid,
+       title
+  FROM customers
+       RIGHT JOIN
+       employees emp ON customers.supportrepid = emp.employeeid
+ GROUP BY 2
+HAVING count(customerid) = 0;
 
-/* (4) Artists who have collaborated, including with artists not in our data: */
+/* (4.05) Employees and their managers - practice of self-joins: */
 
-SELECT a.stage_name,
-       b.stage_name
-  FROM collaborators cols
+SELECT e1.employeeid emp_id,
+       e1.firstname emp_first,
+       e1.lastname emp_last,
+       e1.title emp_title,
+       e2.employeeid managed_by,
+       e2.title manager_title,
+       e2.firstname manager_first,
+       e2.lastname manager_last
+  FROM employees e1
        LEFT JOIN
-       artists a ON a.id = cols.main_artist_id
-       LEFT JOIN
-       artists b ON b.id = cols.feat_artist_id;
-        
-/* (5) Songs in our data which involved collaborations between artists in our data: */
-
-SELECT a.stage_name main_artist,
-       b.stage_name featured_artist,
-       c.title
-  FROM collaborators cols
-       JOIN
-       artists a ON a.id = cols.main_artist_id
-       JOIN
-       artists b ON b.id = cols.feat_artist_id
-       JOIN
-       songs c ON c.artist_id = cols.main_artist_id AND 
-                  c.feat_artist_id = cols.feat_artist_id;
+       employees e2 ON e1.reportsto = e2.employeeid;

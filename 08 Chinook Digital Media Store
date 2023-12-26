@@ -19,7 +19,7 @@ SELECT invoiceid,
        JOIN
        invoices inv ON cust.customerid = inv.customerid;
        
-/* (1.02) Total invoice amounts adminstered by each employee: */
+/* (1.02) Total invoice amounts administered by each employee: */
 
 SELECT emp.employeeid emp_id,
        emp.firstname emp_first,
@@ -34,7 +34,7 @@ SELECT emp.employeeid emp_id,
           2,
           3;
 
-/* (1.03) Total invoice amounts adminstered by each employee, broken down by customers charge to: */
+/* (1.03) Total invoice amounts administered by each employee, broken down by customers charge to: */
 
 SELECT DISTINCT emp.employeeid emp_id,
                 emp.firstname emp_first,

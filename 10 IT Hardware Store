@@ -304,7 +304,7 @@ SELECT
     product_type,
     SUM(sale_price) AS total_rev,
     COUNT(DISTINCT p.product_code) AS num_prods,
-    SUM(sale_price) / COUNT(DISTINCT p.product_code) AS rev_per_type
+    SUM(sale_price) / COUNT(DISTINCT p.product_code) AS rev_per_prod
 FROM
     products p
         JOIN
@@ -695,7 +695,7 @@ LIMIT 5; */
     product_type,
     sum(sale_price) / count(transaction_code) AS rev_per_trans,
     COUNT(DISTINCT p.product_code) AS num_prods,
-    (sum(sale_price) / count(transaction_code)) / COUNT(DISTINCT p.product_code) AS metric_per_type
+    (sum(sale_price) / count(transaction_code)) / COUNT(DISTINCT p.product_code) AS metric_per_prod
 FROM
     products p
         JOIN

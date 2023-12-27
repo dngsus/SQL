@@ -6,7 +6,7 @@
 
 /* (A.1.01) Renaming certain profit-related columns incorrectly named from source: */
 
--- alter table transactions rename column profit_margin to profit;
+/* alter table transactions rename column profit_margin to profit;
 
 -- alter table transactions rename column profit_margin_percentage to profit_margin;
 
@@ -20,9 +20,11 @@
 
 -- alter table markets rename column markets_name to market_name;
 
+*/
+
 /* (A.1.02) Mismatched currencies: */
 
--- Adding an ID column to transactions so as to better identify columns in the subsequent query:
+/* Adding an ID column to transactions so as to better identify columns in the subsequent query:
 
 -- ALTER TABLE transactions ADD transaction_code int NOT NULL AUTO_INCREMENT primary key first;
 
@@ -30,7 +32,9 @@
 -- From inspection, it is apparent that "sale_price" is incorrectly listed under USD, but not other columns.
 -- Hence the historic FX rate used may be reverse engineered. In any case, this FX_rate need not even be used to correct the figures (sales prices).
 
--- SELECT transaction_code, currency, sale_price, profit_margin, profit, cost, sales_qty FROM sales.transactions where currency = "USD";
+*/
+
+/* SELECT transaction_code, currency, sale_price, profit_margin, profit, cost, sales_qty FROM sales.transactions where currency = "USD";
 
 -- select transaction_code, profit + cost as new_sale_price, sale_price, (profit + cost) / sale_price as FX_rate from transactions where currency = "USD";
 
@@ -39,6 +43,7 @@
 -- update transactions set sale_price = 18750 where transaction_code = 135671;
 
 -- update transactions set currency = "INR" where transaction_code in (135589, 135671);
+*/
 
 /* (A.1.03) Typically, profit margins are expressed as a %age: */
 
@@ -46,7 +51,7 @@
 
 /* (A.1.04) Adding by-quarter columns to date table for future analysis: */
 
--- Alter table date add year_quarter char(7);
+/* Alter table date add year_quarter char(7);
 
 -- update date set year_quarter = concat(year, "-Q", quarter(date));
 
@@ -54,7 +59,71 @@
 
 -- update date set quarter = quarter(date);
 
+*/
 
+/* (A.1.05) Missing product_codes filled in: */
+
+/* insert into products values ("Prod280", "Unknown");
+insert into products values ("Prod281", "Unknown");
+insert into products values ("Prod282", "Unknown");
+insert into products values ("Prod283", "Unknown");
+insert into products values ("Prod284", "Unknown");
+insert into products values ("Prod285", "Unknown");
+insert into products values ("Prod286", "Unknown");
+insert into products values ("Prod287", "Unknown");
+insert into products values ("Prod288", "Unknown");
+insert into products values ("Prod289", "Unknown");
+insert into products values ("Prod290", "Unknown");
+insert into products values ("Prod291", "Unknown");
+insert into products values ("Prod292", "Unknown");
+insert into products values ("Prod293", "Unknown");
+insert into products values ("Prod294", "Unknown");
+insert into products values ("Prod295", "Unknown");
+insert into products values ("Prod296", "Unknown");
+insert into products values ("Prod297", "Unknown");
+insert into products values ("Prod298", "Unknown");
+insert into products values ("Prod299", "Unknown");
+insert into products values ("Prod300", "Unknown");
+insert into products values ("Prod301", "Unknown");
+insert into products values ("Prod302", "Unknown");
+insert into products values ("Prod303", "Unknown");
+insert into products values ("Prod304", "Unknown");
+insert into products values ("Prod305", "Unknown");
+insert into products values ("Prod306", "Unknown");
+insert into products values ("Prod307", "Unknown");
+insert into products values ("Prod308", "Unknown");
+insert into products values ("Prod309", "Unknown");
+insert into products values ("Prod310", "Unknown");
+insert into products values ("Prod311", "Unknown");
+insert into products values ("Prod312", "Unknown");
+insert into products values ("Prod313", "Unknown");
+insert into products values ("Prod314", "Unknown");
+insert into products values ("Prod315", "Unknown");
+insert into products values ("Prod316", "Unknown");
+insert into products values ("Prod317", "Unknown");
+insert into products values ("Prod318", "Unknown");
+insert into products values ("Prod319", "Unknown");
+insert into products values ("Prod320", "Unknown");
+insert into products values ("Prod321", "Unknown");
+insert into products values ("Prod322", "Unknown");
+insert into products values ("Prod323", "Unknown");
+insert into products values ("Prod324", "Unknown");
+insert into products values ("Prod325", "Unknown");
+insert into products values ("Prod326", "Unknown");
+insert into products values ("Prod327", "Unknown");
+insert into products values ("Prod328", "Unknown");
+insert into products values ("Prod329", "Unknown");
+insert into products values ("Prod330", "Unknown");
+insert into products values ("Prod331", "Unknown");
+insert into products values ("Prod332", "Unknown");
+insert into products values ("Prod333", "Unknown");
+insert into products values ("Prod334", "Unknown");
+insert into products values ("Prod335", "Unknown");
+insert into products values ("Prod336", "Unknown");
+insert into products values ("Prod337", "Unknown");
+insert into products values ("Prod338", "Unknown");
+insert into products values ("Prod339", "Unknown");
+*/
 
 
 /* SECTION B - Exploring revenues: */
@@ -246,13 +315,13 @@ ORDER BY 2 DESC;
 
 
 
-/* SECTION C - Exploring activity (transactions): */
+/* SECTION C - Exploring activity (sales quantities = purchase quantities): */
 
 /* (C.1) Activity over time: */ 
 
 /* (C.1.01) Overall: */
 
-select count(transaction_code) as num_trans_to_date from transactions;
+select sum(sales_qty) as sales from transactions;
 
 /* (C.1.02) By year: */
 

@@ -1,58 +1,58 @@
-/* This project concerns a computer hardware and peripheral manufacturer that primarily serving Indian customers */
+/* This project concerns a computer hardware and peripheral manufacturer. */
 
 /* Data source: db_dump_version_2.sql from https://codebasics.io/resources/end-to-end-sales-insights-project-using-tableau */
 
 /* SECTION A - Data cleaning and transformation: */
 
-/* (A.1.01) Renaming certain profit-related columns incorrectly named from source. Commented out due to having been run and saved prior to write-up: */
+/* (A.1.01) Renaming certain profit-related columns incorrectly named from source: */
 
 -- alter table transactions rename column profit_margin to profit;
 
 -- alter table transactions rename column profit_margin_percentage to profit_margin;
 
-alter table transactions rename column cost_price to cost;
+-- alter table transactions rename column cost_price to cost;
 
-alter table transactions rename column sales_amount to sale_price;
+-- alter table transactions rename column sales_amount to sale_price;
 
-alter table customers rename column custmer_name to customer_name;
+-- alter table customers rename column custmer_name to customer_name;
 
-alter table markets rename column markets_code to market_code;
+-- alter table markets rename column markets_code to market_code;
 
-alter table markets rename column markets_name to market_name;
+-- alter table markets rename column markets_name to market_name;
 
 /* (A.1.02) Mismatched currencies: */
 
 -- Adding an ID column to transactions so as to better identify columns in the subsequent query:
 
-ALTER TABLE transactions ADD transaction_code int NOT NULL AUTO_INCREMENT primary key first;
+-- ALTER TABLE transactions ADD transaction_code int NOT NULL AUTO_INCREMENT primary key first;
 
 -- Identifying transactions with the 'wrong' currency and correcting them based on historical FX figures.
 -- From inspection, it is apparent that "sale_price" is incorrectly listed under USD, but not other columns.
 -- Hence the historic FX rate used may be reverse engineered. In any case, this FX_rate need not even be used to correct the figures (sales prices).
 
-SELECT transaction_code, currency, sale_price, profit_margin, profit, cost, sales_qty FROM sales.transactions where currency = "USD";
+-- SELECT transaction_code, currency, sale_price, profit_margin, profit, cost, sales_qty FROM sales.transactions where currency = "USD";
 
-select transaction_code, profit + cost as new_sale_price, sale_price, (profit + cost) / sale_price as FX_rate from transactions where currency = "USD";
+-- select transaction_code, profit + cost as new_sale_price, sale_price, (profit + cost) / sale_price as FX_rate from transactions where currency = "USD";
 
-update transactions set sale_price = 37500 where transaction_code = 135589;
+-- update transactions set sale_price = 37500 where transaction_code = 135589;
 
-update transactions set sale_price = 18750 where transaction_code = 135671;
+-- update transactions set sale_price = 18750 where transaction_code = 135671;
 
-update transactions set currency = "INR" where transaction_code in (135589, 135671);
+-- update transactions set currency = "INR" where transaction_code in (135589, 135671);
 
 /* (A.1.03) Typically, profit margins are expressed as a %age: */
 
-update transactions set profit_margin = profit_margin * 100;
+-- update transactions set profit_margin = profit_margin * 100;
 
 /* (A.1.04) Adding by-quarter columns to date table for future analysis: */
 
-Alter table date add year_quarter char(7);
+-- Alter table date add year_quarter char(7);
 
-update date set year_quarter = concat(year, "-Q", quarter(date));
+-- update date set year_quarter = concat(year, "-Q", quarter(date));
 
-alter table date add quarter int after month_name;
+-- alter table date add quarter int after month_name;
 
-update date set quarter = quarter(date);
+-- update date set quarter = quarter(date);
 
 
 
@@ -242,6 +242,8 @@ FROM
     transactions t ON p.product_code = t.product_code
 GROUP BY 1
 ORDER BY 2 DESC;
+
+
 
 
 /* SECTION C - Exploring activity (transactions): */
@@ -434,6 +436,7 @@ ORDER BY 2 DESC;
 
 
 
+
 /* SECTION D - Exploring revenue per transaction = spend per transaction: */
 
 /* (D.1) Rev/trans over time: */ 
@@ -447,7 +450,7 @@ FROM
 
 /* (D.1.02) By year: */
 
-select year(order_date), sum(sale_price) / count(transaction_code) as rev_per_trans, rank() over(order by sum(sale_price) / count(transaction_code) desc) as trans_rank from transactions group by 1 order by 1;
+select year(order_date), sum(sale_price) / count(transaction_code) as rev_per_trans, rank() over(order by sum(sale_price) / count(transaction_code) desc) as metric_rank from transactions group by 1 order by 1;
 
 /* (D.1.03) By year-quarter: */
 
@@ -477,7 +480,7 @@ avg(rev_per_trans)  as rev_per_trans,
 rank() over(order by rev_per_trans desc) as overall_rank,
 occurences_of_quarter,
 (rev_per_trans / occurences_of_quarter) as avg_per_quarter,
-rank() over(order by (rev_per_trans / occurences_of_quarter) desc) as avg_rank
+rank() over(order by (rev_per_trans / occurences_of_quarter) desc) as per_quarter_rank
 from
 	temp --  transactions t on temp.quarter = quarter(t.order_date)
 group by 1
@@ -565,7 +568,7 @@ SELECT
     rank() over (order by sum(sale_price) / count(transaction_code) desc) as overall_metric_rank,
     COUNT(DISTINCT m.market_name) AS num_cities,
     (sum(sale_price) / count(transaction_code)) / COUNT(DISTINCT m.market_name) AS metric_per_city,
-    rank() over (order by ((sum(sale_price) / count(transaction_code)) / COUNT(DISTINCT m.market_name)) desc) as avg_metric_rank
+    rank() over (order by ((sum(sale_price) / count(transaction_code)) / COUNT(DISTINCT m.market_name)) desc) as per_city_rank
 FROM
     markets m
         JOIN
@@ -576,14 +579,15 @@ ORDER BY 2 DESC;
 
 
 
-/* (C.4) Rev/trans by product: */
+/* (D.4) Rev/trans by product: */
 
 -- For the sake of practice, listed below. However, commented out as it does not make obvious sense as a metric, since it involves an interaction with price.
+-- I.e. To accumulate the same revenue per transaction as a more pricey item, a relatively cheap item must be purchased in multiples. However, there is no natural law to generally encourage cheaper products be purchased in mulitples.
 
-/* (C.4.01) Overall: */
+/* (D.4.01) Overall: */
 
 /* SELECT 
-    p.product_code, sum(sale_price) / count(transaction_code) AS rev_per_trans, rank() over(order by count(transaction_code) desc) as metric_rank
+    p.product_code, sum(sale_price) / count(transaction_code) AS rev_per_trans, rank() over(order by (sum(sale_price) / count(transaction_code)) desc) as metric_rank
 FROM
     products p
         JOIN
@@ -616,16 +620,385 @@ GROUP BY 1
 ORDER BY 2
 LIMIT 5; */
 
-/* (C.4.02) By product_type: */
+/* (D.4.02) By product_type: */
 
 /* SELECT 
     product_type,
-    count(transaction_code) AS num_trans,
+    sum(sale_price) / count(transaction_code) AS rev_per_trans,
     COUNT(DISTINCT p.product_code) AS num_prods,
-    count(transaction_code) / COUNT(DISTINCT p.product_code) AS trans_per_type
+    (sum(sale_price) / count(transaction_code)) / COUNT(DISTINCT p.product_code) AS metric_per_type
 FROM
     products p
         JOIN
     transactions t ON p.product_code = t.product_code
 GROUP BY 1
 ORDER BY 2 DESC; */
+
+
+
+
+/* SECTION E - Exploring profit: */
+
+/* (E.1) Profit  over time: */ 
+
+/* (E.1.01) Overall: */
+
+SELECT 
+    SUM(profit) AS profit_to_date
+FROM
+    transactions;
+
+/* (E.1.02) By year: */
+
+select sum(profit) as profit, year(order_date), rank() over(order by sum(profit) desc) as profit_rank from transactions group by 2 order by 2;
+
+/* (E.1.03) By year-quarter: */
+
+select year_quarter,
+sum(profit) as profit,
+rank() over(order by sum(profit) desc) as overall_profit_rank,
+year(order_date) as year,
+quarter(order_date) as quarter,
+rank() over(partition by left(year_quarter, 4) order by sum(profit) desc) as within_year_rank
+from transactions t join date d on t.order_date = d.date group by 1, 4, 5 order by 1;
+
+-- Check, knowing all orders in 2017 occured in Q4:
+
+select sum(profit) as total_trans_2017_Q4 from transactions t join date d on t.order_date = d.date where year(order_date) = 2017;
+
+/* (E.1.04) By aggregated quarter: */
+
+with temp as
+	(select quarter,
+    count(distinct year_quarter) as occurences_of_quarter
+    from date
+    group by 1)
+    
+select quarter,
+sum(profit)  as profit,
+rank() over(order by sum(profit) desc) as overall_profit_rank,
+occurences_of_quarter,
+(sum(profit) / occurences_of_quarter) as avg_profit,
+rank() over(order by (sum(profit)  / occurences_of_quarter) desc) as avg_profit_rank
+from
+	temp join transactions t on temp.quarter = quarter(t.order_date)
+group by 1
+order by 1;
+
+
+
+
+/* (E.2) Profit by customer: */
+
+/* (E.2.01) Overall: */
+
+SELECT 
+    c.customer_code, customer_name, sum(profit) as profit, rank() over(order by count(transaction_code) desc) as profit_rank
+FROM
+    customers c
+        JOIN
+    transactions t ON c.customer_code = t.customer_code
+GROUP BY 1 , 2
+ORDER BY 4;
+
+/* (E.2.01a) Overall - Top 5 customers by profit: */
+
+SELECT 
+    c.customer_code, customer_name, sum(profit) as profit
+FROM
+    customers c
+        JOIN
+    transactions t ON c.customer_code = t.customer_code
+GROUP BY 1 , 2
+ORDER BY 3 DESC
+LIMIT 5;
+
+/* (E.2.01b) Overall - Bottom 5 customers by profit: */
+
+SELECT 
+    c.customer_code,
+    customer_name,
+    sum(profit) as profit
+FROM
+    customers c
+        JOIN
+    transactions t ON c.customer_code = t.customer_code
+GROUP BY 1 , 2
+ORDER BY 3
+LIMIT 5;
+
+/* (E.2.02) By customer_type: */
+
+SELECT 
+    customer_type,
+    sum(profit) as overall_profit,
+    COUNT(DISTINCT c.customer_name) AS num_estab,
+    sum(profit) / COUNT(DISTINCT c.customer_name) AS profit_per_estab
+FROM
+    customers c
+        JOIN
+    transactions t ON c.customer_code = t.customer_code
+GROUP BY 1
+ORDER BY 2 DESC;
+
+
+
+
+/* (E.3) Profit by markets (geography): */
+
+/* (E.3.01) Overall: */
+
+SELECT 
+    m.market_name, sum(profit) as profit, rank() over(order by sum(profit) desc) as profit_rank
+FROM
+    markets m
+        JOIN
+    transactions t ON m.market_code= t.market_code
+GROUP BY 1
+ORDER BY 3;
+
+/* (E.3.02) By zone: */
+
+SELECT 
+    zone,
+    sum(profit) as profit,
+    rank() over (order by sum(profit) desc) as overall_profit_rank,
+    COUNT(DISTINCT m.market_name) AS num_cities,
+    sum(profit) / COUNT(DISTINCT m.market_name) AS profit_per_city,
+    rank() over (order by (sum(profit)) / COUNT(DISTINCT m.market_name) desc) as per_city_profit_rank
+FROM
+    markets m
+        JOIN
+    transactions t ON m.market_code = t.market_code
+GROUP BY 1
+ORDER BY 2 DESC;
+
+
+
+
+/* (E.4) Profit by product: */
+
+/* (E.4.01) Overall: */
+
+SELECT 
+    p.product_code, sum(profit) as profit, rank() over(order by sum(profit) desc) as profit_rank
+FROM
+    products p
+        JOIN
+    transactions t ON p.product_code= t.product_code
+GROUP BY 1
+ORDER BY 3;
+
+/* (E.4.01a) Overall - Top 5 products by profit: */
+
+SELECT 
+     p.product_code, sum(profit) as profit
+FROM
+    products p
+        JOIN
+    transactions t ON p.product_code = t.product_code
+GROUP BY 1
+ORDER BY 2
+ DESC
+LIMIT 5;
+
+/* (E.4.01b) Overall - Bottom 5 products by profit: */
+
+SELECT 
+     p.product_code, sum(profit) as profit
+FROM
+    products p
+        JOIN
+    transactions t ON p.product_code = t.product_code
+GROUP BY 1
+ORDER BY 2
+LIMIT 5;
+
+/* (E.4.02) By product_type: */
+
+SELECT 
+    product_type,
+    sum(profit) as profit,
+    COUNT(DISTINCT p.product_code) AS num_prods,
+    sum(profit) / COUNT(DISTINCT p.product_code) AS profit_per_prod
+FROM
+    products p
+        JOIN
+    transactions t ON p.product_code = t.product_code
+GROUP BY 1
+ORDER BY 2 DESC;
+
+
+
+
+
+
+/* SECTION F - Exploring profit margins (%): */
+
+/* (F.1) Profit margin over time: */ 
+
+/* (F.1.01) Overall: */
+
+select avg(profit_margin) as prof_marg_to_date from transactions;
+
+/* (F.1.02) By year: */
+
+select avg(profit_margin) as prof_marg, year(order_date), rank() over(order by avg(profit_margin) desc) as profit_rank from transactions group by 2 order by 2;
+
+/* (F.1.03) By year-quarter: */
+
+select year_quarter,
+avg(profit_margin) as prof_marg,
+rank() over(order by sum(profit) desc) as overall_prof_marg_rank,
+year(order_date) as year,
+quarter(order_date) as quarter,
+rank() over(partition by left(year_quarter, 4) order by avg(profit_margin) desc) as within_year_rank
+from transactions t join date d on t.order_date = d.date group by 1, 4, 5 order by 1;
+
+-- Check, knowing all orders in 2017 occured in Q4:
+
+select avg(profit_margin) as prof_marg_2017_Q4 from transactions t join date d on t.order_date = d.date where year(order_date) = 2017;
+
+/* (F.1.04) By aggregated quarter: */
+
+select quarter,
+avg(profit_margin) as prof_marg,
+rank() over(order by sum(profit) desc) as prof_marg_rank
+from transactions t join date d on t.order_date = d.date
+group by 1
+order by 1;
+
+
+
+/* (F.2) Profit margin by customer: */
+
+/* (F.2.01) Overall: */
+
+SELECT 
+    c.customer_code, customer_name, avg(profit_margin) as prof_marg, rank() over(order by count(transaction_code) desc) as prof_marg_rank
+FROM
+    customers c
+        JOIN
+    transactions t ON c.customer_code = t.customer_code
+GROUP BY 1 , 2
+ORDER BY 4;
+
+/* (F.2.01a) Overall - Top 5 customers by profit margin: */
+
+SELECT 
+    c.customer_code, customer_name, avg(profit_margin) as prof_marg
+FROM
+    customers c
+        JOIN
+    transactions t ON c.customer_code = t.customer_code
+GROUP BY 1 , 2
+ORDER BY 3 DESC
+LIMIT 5;
+
+/* (F.2.01b) Overall - Bottom 5 customers by profit margin: */
+
+SELECT 
+    c.customer_code,
+    customer_name,
+    avg(profit_margin) as prof_marg
+FROM
+    customers c
+        JOIN
+    transactions t ON c.customer_code = t.customer_code
+GROUP BY 1 , 2
+ORDER BY 3
+LIMIT 5;
+
+/* (F.2.02) By customer_type: */
+
+SELECT 
+    customer_type,
+    avg(profit_margin) as overall_prof_marg
+FROM
+    customers c
+        JOIN
+    transactions t ON c.customer_code = t.customer_code
+GROUP BY 1
+ORDER BY 2 DESC;
+
+
+
+
+/* (F.3) Profit by markets (geography): */
+
+/* (F.3.01) Overall: */
+
+SELECT 
+    m.market_name, avg(profit_margin) as prof_marg, rank() over(order by avg(profit_margin) desc) as prof_marg_rank
+FROM
+    markets m
+        JOIN
+    transactions t ON m.market_code= t.market_code
+GROUP BY 1
+ORDER BY 3;
+
+/* (F.3.02) By zone: */
+
+SELECT 
+    zone,
+    avg(profit_margin) as prof_marg,
+    rank() over (order by avg(profit_margin) desc) as prof_marg_rank
+FROM
+    markets m
+        JOIN
+    transactions t ON m.market_code = t.market_code
+GROUP BY 1
+ORDER BY 2 DESC;
+
+
+
+
+/* (F.4) Profit margin by product: */
+
+/* (F.4.01) Overall: */
+
+SELECT 
+    p.product_code, avg(profit_margin) as prof_marg, rank() over(order by avg(profit_margin) desc) as prof_marg_rank
+FROM
+    products p
+        JOIN
+    transactions t ON p.product_code= t.product_code
+GROUP BY 1
+ORDER BY 3;
+
+/* (F.4.01a) Overall - Top 5 products by profit margin: */
+
+SELECT 
+     p.product_code, avg(profit_margin) as prof_marg
+FROM
+    products p
+        JOIN
+    transactions t ON p.product_code = t.product_code
+GROUP BY 1
+ORDER BY 2
+ DESC
+LIMIT 5;
+
+/* (F.4.01b) Overall - Bottom 5 products by profit margin: */
+
+SELECT 
+     p.product_code, avg(profit_margin) as prof_marg
+FROM
+    products p
+        JOIN
+    transactions t ON p.product_code = t.product_code
+GROUP BY 1
+ORDER BY 2
+LIMIT 5;
+
+/* (F.4.02) By product_type: */
+
+SELECT 
+    product_type,
+    avg(profit_margin) as prof_marg
+FROM
+    products p
+        JOIN
+    transactions t ON p.product_code = t.product_code
+GROUP BY 1
+ORDER BY 2 DESC;

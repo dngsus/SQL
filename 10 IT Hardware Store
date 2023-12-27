@@ -1,0 +1,631 @@
+/* This project concerns a computer hardware and peripheral manufacturer that primarily serving Indian customers */
+
+/* Data source: db_dump_version_2.sql from https://codebasics.io/resources/end-to-end-sales-insights-project-using-tableau */
+
+/* SECTION A - Data cleaning and transformation: */
+
+/* (A.1.01) Renaming certain profit-related columns incorrectly named from source. Commented out due to having been run and saved prior to write-up: */
+
+-- alter table transactions rename column profit_margin to profit;
+
+-- alter table transactions rename column profit_margin_percentage to profit_margin;
+
+alter table transactions rename column cost_price to cost;
+
+alter table transactions rename column sales_amount to sale_price;
+
+alter table customers rename column custmer_name to customer_name;
+
+alter table markets rename column markets_code to market_code;
+
+alter table markets rename column markets_name to market_name;
+
+/* (A.1.02) Mismatched currencies: */
+
+-- Adding an ID column to transactions so as to better identify columns in the subsequent query:
+
+ALTER TABLE transactions ADD transaction_code int NOT NULL AUTO_INCREMENT primary key first;
+
+-- Identifying transactions with the 'wrong' currency and correcting them based on historical FX figures.
+-- From inspection, it is apparent that "sale_price" is incorrectly listed under USD, but not other columns.
+-- Hence the historic FX rate used may be reverse engineered. In any case, this FX_rate need not even be used to correct the figures (sales prices).
+
+SELECT transaction_code, currency, sale_price, profit_margin, profit, cost, sales_qty FROM sales.transactions where currency = "USD";
+
+select transaction_code, profit + cost as new_sale_price, sale_price, (profit + cost) / sale_price as FX_rate from transactions where currency = "USD";
+
+update transactions set sale_price = 37500 where transaction_code = 135589;
+
+update transactions set sale_price = 18750 where transaction_code = 135671;
+
+update transactions set currency = "INR" where transaction_code in (135589, 135671);
+
+/* (A.1.03) Typically, profit margins are expressed as a %age: */
+
+update transactions set profit_margin = profit_margin * 100;
+
+/* (A.1.04) Adding by-quarter columns to date table for future analysis: */
+
+Alter table date add year_quarter char(7);
+
+update date set year_quarter = concat(year, "-Q", quarter(date));
+
+alter table date add quarter int after month_name;
+
+update date set quarter = quarter(date);
+
+
+
+
+/* SECTION B - Exploring revenues: */
+
+/* (B.1) Revenues over time : */
+
+/* (B.1.01) Overall: */
+
+SELECT 
+    SUM(sale_price) AS total_rev_to_date
+FROM
+    transactions;
+
+/* (B.1.02) By year: */
+
+select sum(sale_price) as total_rev, year(order_date) as year, rank() over(order by sum(sale_price) desc) as rev_rank from transactions group by 2 order by 2;
+
+/* (B.1.03) By year-quarter: */
+
+select year_quarter, sum(sale_price) as total_rev,
+rank() over(order by sum(sale_price)) as overall_rev_rank,
+quarter(order_date) as quarter,
+year(order_date) as year,
+rank() over(partition by left(year_quarter, 4) order by sum(sale_price)) as within_year_rank
+from transactions t join date d on t.order_date = d.date group by 1, 4, 5 order by 1;
+
+-- Check, knowing all orders in 2017 occured in Q4:
+
+select sum(sale_price) as total_rev_2017_Q4 from transactions t join date d on t.order_date = d.date where year(order_date) = 2017;
+
+/* (B.1.04) By aggregated quarter: */
+
+with temp as
+	(select quarter,
+    count(distinct year_quarter) as occurences_of_quarter
+    from date
+    group by 1)
+    
+select quarter,
+sum(sale_price) as total_rev,
+rank() over(order by sum(sale_price) desc) as overall_rev_rank,
+occurences_of_quarter,
+(sum(sale_price) / occurences_of_quarter) as avg_rev,
+rank() over(order by (sum(sale_price) / occurences_of_quarter) desc) as avg_rev_rank
+from
+	temp join transactions t on temp.quarter = quarter(t.order_date)
+group by 1
+order by 1;
+
+
+
+
+/* (B.2) Revenues by customer: */
+
+/* (B.2.01) Overall: */
+
+SELECT 
+    c.customer_code, customer_name, SUM(sale_price) AS spend, rank() over(order by sum(sale_price) desc) as spend_rank
+FROM
+    customers c
+        JOIN
+    transactions t ON c.customer_code = t.customer_code
+GROUP BY 1 , 2
+ORDER BY 4;
+
+/* (B.2.01a) Overall - Top 5 customers by spending: */
+
+SELECT 
+    c.customer_code, customer_name, SUM(sale_price) AS spend
+FROM
+    customers c
+        JOIN
+    transactions t ON c.customer_code = t.customer_code
+GROUP BY 1 , 2
+ORDER BY 3 DESC
+LIMIT 5;
+
+/* (B.2.01b) Overall - Bottom 5 customers by spending: */
+
+SELECT 
+    c.customer_code, customer_name, SUM(sale_price) AS spend
+FROM
+    customers c
+        JOIN
+    transactions t ON c.customer_code = t.customer_code
+GROUP BY 1 , 2
+ORDER BY 3
+LIMIT 5;
+
+/* (B.2.02) By customer_type: */
+
+SELECT 
+    customer_type,
+    SUM(sale_price) AS total_spend,
+    COUNT(DISTINCT c.customer_name) AS num_estab,
+    SUM(sale_price) / COUNT(DISTINCT c.customer_name) AS avg_spend_per_estab
+FROM
+    customers c
+        JOIN
+    transactions t ON c.customer_code = t.customer_code
+GROUP BY 1
+ORDER BY 2 DESC;
+
+
+
+/* (B.3) Revenues by markets (geography): */
+
+/* (B.3.01) Overall: */
+
+SELECT 
+    m.market_name, SUM(sale_price) AS spend, rank() over(order by sum(sale_price) desc) as spend_rank
+FROM
+    markets m
+        JOIN
+    transactions t ON m.market_code= t.market_code
+GROUP BY 1
+ORDER BY 3;
+
+/* (B.3.02) By zone: */
+
+SELECT 
+    zone,
+    SUM(sale_price) AS total_spend,
+    rank() over (order by SUM(sale_price) desc) as total_spend_rank,
+    COUNT(DISTINCT m.market_name) AS num_cities,
+    SUM(sale_price) / COUNT(DISTINCT m.market_name) AS spend_per_city,
+    rank() over (order by SUM(sale_price) / COUNT(DISTINCT m.market_name) desc) as avg_spend_rank
+FROM
+    markets m
+        JOIN
+    transactions t ON m.market_code = t.market_code
+GROUP BY 1
+ORDER BY 2 DESC;
+
+
+
+/* (B.4) Revenues by product: */
+
+/* (B.4.01) Overall: */
+
+SELECT 
+    p.product_code, SUM(sale_price) AS rev, rank() over(order by sum(sale_price) desc) as rev_rank
+FROM
+    products p
+        JOIN
+    transactions t ON p.product_code= t.product_code
+GROUP BY 1
+ORDER BY 3;
+
+/* (B.4.01a) Overall - Top 5 products by revenue: */
+
+SELECT 
+     p.product_code, SUM(sale_price) AS rev
+FROM
+    products p
+        JOIN
+    transactions t ON p.product_code = t.product_code
+GROUP BY 1
+ORDER BY 2
+ DESC
+LIMIT 5;
+
+/* (B.4.01b) Overall - Bottom 5 products by revenue: */
+
+SELECT 
+     p.product_code, SUM(sale_price) AS rev
+FROM
+    products p
+        JOIN
+    transactions t ON p.product_code = t.product_code
+GROUP BY 1
+ORDER BY 2
+LIMIT 5;
+
+/* (B.4.02) By product_type: */
+
+SELECT 
+    product_type,
+    SUM(sale_price) AS total_rev,
+    COUNT(DISTINCT p.product_code) AS num_prods,
+    SUM(sale_price) / COUNT(DISTINCT p.product_code) AS rev_per_type
+FROM
+    products p
+        JOIN
+    transactions t ON p.product_code = t.product_code
+GROUP BY 1
+ORDER BY 2 DESC;
+
+
+/* SECTION C - Exploring activity (transactions): */
+
+/* (C.1) Activity over time: */ 
+
+/* (C.1.01) Overall: */
+
+select count(transaction_code) as num_trans_to_date from transactions;
+
+/* (C.1.02) By year: */
+
+select count(transaction_code) as num_trans, year(order_date), rank() over(order by count(transaction_code) desc) as trans_rank from transactions group by 2 order by 2;
+
+/* (C.1.03) By year-quarter: */
+
+select year_quarter,
+count(transaction_code) as num_trans,
+rank() over(order by count(transaction_code) desc) as overall_trans_rank,
+year(order_date) as year,
+quarter(order_date) as quarter,
+rank() over(partition by left(year_quarter, 4) order by count(transaction_code) desc) as within_year_rank
+from transactions t join date d on t.order_date = d.date group by 1, 4, 5 order by 1;
+
+-- Check, knowing all orders in 2017 occured in Q4:
+
+select count(transaction_code) as total_trans_2017_Q4 from transactions t join date d on t.order_date = d.date where year(order_date) = 2017;
+
+/* (C.1.04) By aggregated quarter: */
+
+with temp as
+	(select quarter,
+    count(distinct year_quarter) as occurences_of_quarter
+    from date
+    group by 1)
+    
+select quarter,
+count(transaction_code)  as total_trans,
+rank() over(order by count(transaction_code) desc) as overall_trans_rank,
+occurences_of_quarter,
+(count(transaction_code)  / occurences_of_quarter) as avg_trans,
+rank() over(order by (count(transaction_code)  / occurences_of_quarter) desc) as avg_trans_rank
+from
+	temp join transactions t on temp.quarter = quarter(t.order_date)
+group by 1
+order by 1;
+
+
+
+
+/* (C.2) Activity by customer: */
+
+/* (C.2.01) Overall: */
+
+SELECT 
+    c.customer_code, customer_name, count(transaction_code) AS num_trans, rank() over(order by count(transaction_code) desc) as trans_rank
+FROM
+    customers c
+        JOIN
+    transactions t ON c.customer_code = t.customer_code
+GROUP BY 1 , 2
+ORDER BY 4;
+
+/* (C.2.01a) Overall - Top 5 customers by spending: */
+
+SELECT 
+    c.customer_code, customer_name, count(transaction_code) AS trans
+FROM
+    customers c
+        JOIN
+    transactions t ON c.customer_code = t.customer_code
+GROUP BY 1 , 2
+ORDER BY 3 DESC
+LIMIT 5;
+
+/* (C.2.01b) Overall - Bottom 5 customers by spending: */
+
+SELECT 
+    c.customer_code,
+    customer_name,
+    COUNT(transaction_code) AS trans
+FROM
+    customers c
+        JOIN
+    transactions t ON c.customer_code = t.customer_code
+GROUP BY 1 , 2
+ORDER BY 3
+LIMIT 5;
+
+/* (C.2.02) By customer_type: */
+
+SELECT 
+    customer_type,
+    count(transaction_code) AS total_trans,
+    COUNT(DISTINCT c.customer_name) AS num_estab,
+    count(transaction_code) / COUNT(DISTINCT c.customer_name) AS avg_trans_per_estab
+FROM
+    customers c
+        JOIN
+    transactions t ON c.customer_code = t.customer_code
+GROUP BY 1
+ORDER BY 2 DESC;
+
+
+
+
+/* (C.3) Activity by markets (geography): */
+
+/* (C.3.01) Overall: */
+
+SELECT 
+    m.market_name, count(transaction_code) AS num_trans, rank() over(order by count(transaction_code) desc) as trans_rank
+FROM
+    markets m
+        JOIN
+    transactions t ON m.market_code= t.market_code
+GROUP BY 1
+ORDER BY 3;
+
+/* (C.3.02) By zone: */
+
+SELECT 
+    zone,
+    count(transaction_code) AS num_trans,
+    rank() over (order by count(transaction_code)desc) as total_trans_rank,
+    COUNT(DISTINCT m.market_name) AS num_cities,
+    count(transaction_code) / COUNT(DISTINCT m.market_name) AS trans_per_city,
+    rank() over (order by (count(transaction_code)) / COUNT(DISTINCT m.market_name) desc) as avg_trans_rank
+FROM
+    markets m
+        JOIN
+    transactions t ON m.market_code = t.market_code
+GROUP BY 1
+ORDER BY 2 DESC;
+
+
+
+
+/* (C.4) Activity by product: */
+
+/* (C.4.01) Overall: */
+
+SELECT 
+    p.product_code, count(transaction_code) AS num_purchases, rank() over(order by count(transaction_code) desc) as purchase_rank
+FROM
+    products p
+        JOIN
+    transactions t ON p.product_code= t.product_code
+GROUP BY 1
+ORDER BY 3;
+
+/* (C.4.01a) Overall - Top 5 products by activity: */
+
+SELECT 
+     p.product_code, count(transaction_code) AS num_purchases
+FROM
+    products p
+        JOIN
+    transactions t ON p.product_code = t.product_code
+GROUP BY 1
+ORDER BY 2
+ DESC
+LIMIT 5;
+
+/* (C.4.01b) Overall - Bottom 5 products by activity: */
+
+SELECT 
+     p.product_code, count(transaction_code) AS num_purchases
+FROM
+    products p
+        JOIN
+    transactions t ON p.product_code = t.product_code
+GROUP BY 1
+ORDER BY 2
+LIMIT 5;
+
+/* (C.4.02) By product_type: */
+
+SELECT 
+    product_type,
+    count(transaction_code) AS num_purchases,
+    COUNT(DISTINCT p.product_code) AS num_prods,
+    count(transaction_code) / COUNT(DISTINCT p.product_code) AS purchases_per_prod
+FROM
+    products p
+        JOIN
+    transactions t ON p.product_code = t.product_code
+GROUP BY 1
+ORDER BY 2 DESC;
+
+
+
+/* SECTION D - Exploring revenue per transaction = spend per transaction: */
+
+/* (D.1) Rev/trans over time: */ 
+
+/* (D.1.01) Overall: */
+
+SELECT 
+    SUM(sale_price) / COUNT(transaction_code) AS rev_per_trans_to_date
+FROM
+    transactions;
+
+/* (D.1.02) By year: */
+
+select year(order_date), sum(sale_price) / count(transaction_code) as rev_per_trans, rank() over(order by sum(sale_price) / count(transaction_code) desc) as trans_rank from transactions group by 1 order by 1;
+
+/* (D.1.03) By year-quarter: */
+
+select year_quarter,
+sum(sale_price) / count(transaction_code) as rev_per_trans,
+rank() over(order by sum(sale_price) / count(transaction_code) desc) as overall_rank,
+year(order_date) as year,
+quarter(order_date) as quarter,
+rank() over(partition by left(year_quarter, 4) order by sum(sale_price) / count(transaction_code) desc) as within_year_rank
+from transactions t join date d on t.order_date = d.date group by 1, 4, 5 order by 1;
+
+-- Check, knowing all orders in 2017 occured in Q4:
+
+select sum(sale_price) / count(transaction_code) as metric_2017_Q4 from transactions t join date d on t.order_date = d.date where year(order_date) = 2017;
+
+/* (D.1.04) By aggregated quarter: */
+
+with temp as
+	(select quarter,
+    count(distinct year_quarter) as occurences_of_quarter,
+    sum(sale_price) / count(transaction_code) as rev_per_trans
+    from date d join transactions t on d.date = t.order_date
+    group by 1)
+    
+select quarter,
+avg(rev_per_trans)  as rev_per_trans,
+rank() over(order by rev_per_trans desc) as overall_rank,
+occurences_of_quarter,
+(rev_per_trans / occurences_of_quarter) as avg_per_quarter,
+rank() over(order by (rev_per_trans / occurences_of_quarter) desc) as avg_rank
+from
+	temp --  transactions t on temp.quarter = quarter(t.order_date)
+group by 1
+order by 1;
+
+
+
+
+/* (D.2) Spend/trans by customer: */
+
+/* (D.2.01) Overall: */
+
+SELECT 
+    c.customer_code, customer_name,  sum(sale_price) / count(transaction_code) AS spend_per_trans, rank() over(order by  sum(sale_price) / count(transaction_code) desc) as metric_rank
+FROM
+    customers c
+        JOIN
+    transactions t ON c.customer_code = t.customer_code
+GROUP BY 1 , 2
+ORDER BY 4;
+
+/* (D.2.01a) Overall - Top 5 customers by spend/trans: */
+
+SELECT 
+    c.customer_code, customer_name,  sum(sale_price) / count(transaction_code) AS spend_per_trans
+FROM
+    customers c
+        JOIN
+    transactions t ON c.customer_code = t.customer_code
+GROUP BY 1 , 2
+ORDER BY 3 DESC
+LIMIT 5;
+
+/* (D.2.01b) Overall - Bottom 5 customers by spend/trans: */
+
+SELECT 
+    c.customer_code,
+    customer_name,
+    sum(sale_price) / count(transaction_code) AS spend_per_trans
+FROM
+    customers c
+        JOIN
+    transactions t ON c.customer_code = t.customer_code
+GROUP BY 1 , 2
+ORDER BY 3
+LIMIT 5;
+
+/* (D.2.02) By customer_type: */
+
+SELECT 
+    customer_type,
+    sum(sale_price) / count(transaction_code) AS spend_per_trans,
+    COUNT(DISTINCT c.customer_name) AS num_estab,
+    (sum(sale_price) / count(transaction_code)) / COUNT(DISTINCT c.customer_name) AS avg_per_estab
+FROM
+    customers c
+        JOIN
+    transactions t ON c.customer_code = t.customer_code
+GROUP BY 1
+ORDER BY 2 DESC;
+
+
+
+
+/* (D.3) Spend/trans by markets (geography): */
+
+/* (D.3.01) Overall: */
+
+SELECT 
+    m.market_name, sum(sale_price) / count(transaction_code) AS spend_per_trans, rank() over(order by (sum(sale_price) / count(transaction_code)) desc) as metric_rank
+FROM
+    markets m
+        JOIN
+    transactions t ON m.market_code= t.market_code
+GROUP BY 1
+ORDER BY 3;
+
+
+
+/* (D.3.02) By zone: */
+
+SELECT 
+    zone,
+    sum(sale_price) / count(transaction_code) AS spend_per_trans,
+    rank() over (order by sum(sale_price) / count(transaction_code) desc) as overall_metric_rank,
+    COUNT(DISTINCT m.market_name) AS num_cities,
+    (sum(sale_price) / count(transaction_code)) / COUNT(DISTINCT m.market_name) AS metric_per_city,
+    rank() over (order by ((sum(sale_price) / count(transaction_code)) / COUNT(DISTINCT m.market_name)) desc) as avg_metric_rank
+FROM
+    markets m
+        JOIN
+    transactions t ON m.market_code = t.market_code
+GROUP BY 1
+ORDER BY 2 DESC;
+
+
+
+
+/* (C.4) Rev/trans by product: */
+
+-- For the sake of practice, listed below. However, commented out as it does not make obvious sense as a metric, since it involves an interaction with price.
+
+/* (C.4.01) Overall: */
+
+/* SELECT 
+    p.product_code, sum(sale_price) / count(transaction_code) AS rev_per_trans, rank() over(order by count(transaction_code) desc) as metric_rank
+FROM
+    products p
+        JOIN
+    transactions t ON p.product_code= t.product_code
+GROUP BY 1
+ORDER BY 3; */
+
+/* (D.4.01a) Overall - Top 5 products by rev/trans: */
+
+/* SELECT 
+     p.product_code, sum(sale_price) / count(transaction_code) AS rev_per_trans
+FROM
+    products p
+        JOIN
+    transactions t ON p.product_code = t.product_code
+GROUP BY 1
+ORDER BY 2
+ DESC
+LIMIT 5; */
+
+/* (D.4.01b) Overall - Bottom 5 products by rev/trans: */
+
+/* SELECT 
+     p.product_code, sum(sale_price) / count(transaction_code) AS rev_per_trans
+FROM
+    products p
+        JOIN
+    transactions t ON p.product_code = t.product_code
+GROUP BY 1
+ORDER BY 2
+LIMIT 5; */
+
+/* (C.4.02) By product_type: */
+
+/* SELECT 
+    product_type,
+    count(transaction_code) AS num_trans,
+    COUNT(DISTINCT p.product_code) AS num_prods,
+    count(transaction_code) / COUNT(DISTINCT p.product_code) AS trans_per_type
+FROM
+    products p
+        JOIN
+    transactions t ON p.product_code = t.product_code
+GROUP BY 1
+ORDER BY 2 DESC; */

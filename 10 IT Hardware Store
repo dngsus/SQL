@@ -127,8 +127,6 @@ insert into products values ("Prod339", "Unknown");
 
 */
 
-
-
 /* SECTION B - Exploring revenues: */
 
 /* (B.1) Revenues over time : */
@@ -142,7 +140,11 @@ FROM
 
 /* (B.1.02) By year: */
 
-select sum(sale_price) as total_rev, year(order_date) as year, rank() over(order by sum(sale_price) desc) as rev_rank from transactions group by 2 order by 2;
+select sum(sale_price) as total_rev,
+year(order_date) as year,
+rank() over(order by sum(sale_price) desc) as rev_rank from transactions
+group by 2
+order by 2;
 
 /* (B.1.03) By year-quarter: */
 

@@ -2,6 +2,8 @@
 
 -- Data source: db_dump_version_2.sql from https://codebasics.io/resources/end-to-end-sales-insights-project-using-tableau
 
+-- Power BI dashboard: https://www.novypro.com/project/atliq-it-store-power-bi
+
 /* SECTION A - Data cleaning and transformation: */
 
 /* (A.1.01) Renaming columns to more accurately reflect business metrics and/or typos: */

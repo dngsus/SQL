@@ -201,7 +201,7 @@ SELECT billingcountry,
   FROM temp;
 
 /* Comments for (2):
-    -  In a majority of countries for which the servicing is sharaed, Jane takes a relatively higher contribution. The opposite for Steve.
+    -  In a majority of countries for which the servicing is shared, Jane takes a relatively higher contribution. The opposite for Steve.
     Assuming that there is a purposeful mechanism through which countries are targeted, i.e. country is not a random attribute of deals,
     there is scope to raise discussion over relative contribution in this regard. */
     

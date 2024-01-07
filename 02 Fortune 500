@@ -3,8 +3,8 @@ I investigate and compare revenues between (groups of) companies. */
 
 /* Overall takeaways:
     - Companies are split evenly above and below mean revenue, and this does not change when they are split into 'tech' or 'non-tech' firms.
-    For both such groups though, smaller firms (< median) have lower absolute revenues alongside higher per-head revenues.
-    - There are signs that larger companies (> mean headcount), irrespective of industry, do have notably higher revenues, although not in terms of per-head values.
+    For both such groups though, smaller firms (< median headcount) have lower absolute revenues alongside higher per-head revenues.
+    - Companies are distributed fairly evenly in terms of revenues, though mega-players do pull the mean up, skewing it above the median.
 
 /* This project uses the following data: */
 
@@ -131,7 +131,7 @@ ORDER BY rev_quart;
 
 /* Takeaways from (1):
     - Company revenues seem to be distributed fairly symmetrically around the mean,
-    although the mean is pulled up (higher than the median) due to notably high figures at the top end.
+    although the mean is pulled above the median due to notably high figures at the top end.
     
 /* (2) Exploring similar statistics on a more constrained sample: */
 
@@ -175,8 +175,8 @@ FROM (SELECT employees
         
 select
   company_name,
-    revenue,
-  (SELECT avg(revenue) FROM fortune_companies) overall_avg_rev,
+    round(revenue),
+  (SELECT round(avg(revenue)) FROM fortune_companies) overall_avg_rev,
   employees,
   (SELECT round(AVG(employees))
 FROM (SELECT employees
@@ -220,9 +220,8 @@ FROM (SELECT employees
               FROM fortune_companies)))
 group by 2;
 
-/* Note: as 'tech' and 'non-tech' are collectively exhaustive,
-it follows that the even distribution of tech companies about the mean implies the same for non-tech companies.
-Regardless, queries to investigate this are below. */
+/* Note: as 'tech' and 'non-tech' are collectively exhaustive,the distribution of non-tech companies may be deduced from our existing knowledge on the overall distribution and the tech distribution.
+Regardless, queries to show this are below. */
 
 /* (2.05) Investigating distribution of non-tech companies as per their revenue categorisation */
 
@@ -254,8 +253,8 @@ FROM (SELECT employees
 group by 2;
 
 /* Takeaways from (2):
-    - Even isolated into 'tech' and 'non-tech' groups, distribution is still fairly even around the mean in terms of revenue.
-    - Having less than median headcount does increase the likelihood of below mean revenue.
+    - Even isolated into 'tech' and 'non-tech' groups, distribution is fairly even around the mean in terms of revenue.
+    - Having less than median headcount does increase the likelihood of below mean revenue, especially for tech companies in the data.
     - Note: due to extreme high-values, majority of firms are below the mean in terms of employees.
 
 /* (3) Comparing tech vs non-tech companies directly: */
@@ -263,24 +262,24 @@ group by 2;
 /* (3.01) Comparing revenues across companies grouped by industry: */
 
 SELECT CASE WHEN industry IN ("Technology", "Telecommunications") THEN "Tech" ELSE "Not Tech" END AS industry_category,
-       sum(revenue),
-       count( * ) num_comp,
-       sum(revenue) / count( * ) industry_avg_rev,
-       sum(employees) / 1000 industry_headcount_thousands,
-       sum(revenue) / sum(employees) per_head_rev
+       round(sum(revenue)) revs,
+       count( * ) num_companies,
+       round(sum(revenue) / count( * )) industry_avg_rev,
+       sum(employees) / 1000 industry_headcount_1000s,
+       round(((sum(revenue) * 1000) / sum(employees)), 6) per_1000_head_rev
   FROM fortune_companies
  GROUP BY 1;
  
-/* (3.02) Comparing revenues across companies grouped by industry, assuming below average headcount: */
+/* (3.02) Comparing revenues across companies grouped by industry, assuming below median headcount: */
  
 SELECT CASE WHEN industry IN ("Technology", "Telecommunications") THEN "Tech" ELSE "Not Tech" END AS industry_category,
-       sum(revenue),
-       count( * ) no_comp_in_industry,
-       sum(revenue) / count( * ) industry_avg_rev,
-        sum(employees) / 1000 industry_headcount_thousands,
-       sum(revenue) / sum(employees) per_head_rev
+       round(sum(revenue)) revs,
+       count( * ) num_companies,
+       round(sum(revenue) / count( * )) industry_avg_rev,
+       sum(employees) / 1000 industry_headcount_1000s,
+       round(((sum(revenue) * 1000) / sum(employees)), 2) per_1000_head_rev
   FROM fortune_companies
-  WHERE employees < (SELECT round(AVG(employees))
+  WHERE employees < (SELECT AVG(employees)
 FROM (SELECT employees
       FROM fortune_companies
       ORDER BY employees
@@ -289,25 +288,26 @@ FROM (SELECT employees
               FROM fortune_companies)))
  GROUP BY 1;
  
-/* Comments for (3):
-    - Across industry categories, having less than average headcount does reduce both absolute/overall revenues, especialy for Tech companies.
-    - Per head revenue, however, increses.
-    - Further statistical procedures should be undertaken to quantify this more exactly and ascertain significance.
-    - Indeed from (3.03) below, which studies the revenue of relatively larger firms,
-    absolute revenue increases whilst per-head figures fall by a lot, indicating there is no simple linear relationship
-    and/or revenues are not wholly explainable by headcuont alone.
-    Plus, there is a need for a larger dataset.
-      */
-
 /* (3.03) Revenue analysis of larger firms: */
  
-SELECT sum(revenue),
-       count( * ) no_comp_in_industry,
-       sum(revenue) / count( * ) industry_avg_rev,
-       sum(employees) / 1000 industry_headcount_thousands,
-       sum(revenue) / sum(employees) per_head_rev
+SELECT CASE WHEN industry IN ("Technology", "Telecommunications") THEN "Tech" ELSE "Not Tech" END AS industry_category,
+       round(sum(revenue)) revs,
+       count( * ) num_companies,
+       round(sum(revenue) / count( * )) industry_avg_rev,
+       sum(employees) / 1000 industry_headcount_1000s,
+       round(((sum(revenue) * 1000) / sum(employees)), 2) per_1000_head_rev
   FROM fortune_companies
- WHERE employees > (
-                       SELECT avg(employees) 
-                         FROM fortune_companies
-                   );
+  WHERE employees > (SELECT AVG(employees)
+FROM (SELECT employees
+      FROM fortune_companies
+      ORDER BY employees
+      LIMIT 2 - (SELECT COUNT(*) FROM fortune_companies) % 2
+      OFFSET (SELECT (COUNT(*) - 1) / 2
+              FROM fortune_companies)))
+ GROUP BY 1;
+
+/* Comments for (3):
+    - Across industry categories, having less than median headcount does reduce both absolute/overall revenues, especialy for Tech companies.
+    - Per head revenue, however, increses (a lot).
+    - The opposite may be observed for companies above the median in headcount.
+      */

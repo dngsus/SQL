@@ -2,69 +2,55 @@
 
 -- Data source: db_dump_version_2.sql from https://codebasics.io/resources/end-to-end-sales-insights-project-using-tableau
 
--- Power BI dashboard: https://www.novypro.com/project/atliq-it-store-power-bi
-
 /* SECTION A - Data cleaning and transformation: */
+-- This is the only section integral to my overall project. Sections B onwards are exercises in querying the data to find insights through SQL.
 
-/* (A.1.01) Renaming columns to more accurately reflect business metrics and/or typos: */
+/* (A.1) Renaming columns to more accurately reflect business metrics and/or typos:
 
-/* alter table transactions rename column profit_margin to profit;
+alter table transactions rename column profit_margin to profit;
 alter table transactions rename column profit to gross_profit;
-
 alter table transactions rename column profit_margin_percentage to profit_margin;
 alter table transactions rename column profit_margin to gross_margin;
-
 alter table transactions rename column cost_price to cost;
-
 alter table transactions rename column sales_amount to sale_price;
-
 alter table customers rename column custmer_name to customer_name;
-
 alter table markets rename column markets_code to market_code;
-
 alter table markets rename column markets_name to market_name;
 
 */
 
-/* (A.1.02) Mismatched currencies:
+/* (A.2) Mismatched currencies:
 
 Adding an ID column to transactions so as to better identify columns in the subsequent query:
 
 ALTER TABLE transactions ADD transaction_code int NOT NULL AUTO_INCREMENT primary key first;
 
 Identifying transactions with the 'wrong' currency and correcting them based on historical FX figures.
-From inspection, it is apparent that "sale_price" is incorrectly listed under USD, but not other columns.
+From inspection, it is apparent that "sale_price" is incorrectly listed under USD, but not other columns. 
 Hence the historic FX rate used may be reverse engineered. In any case, this FX_rate need not even be used to correct the figures (sales prices).
 
 SELECT transaction_code, currency, sale_price, profit_margin, profit, cost, sales_qty FROM sales.transactions where currency = "USD";
-
 select transaction_code, profit + cost as new_sale_price, sale_price, (profit + cost) / sale_price as FX_rate from transactions where currency = "USD";
-
 update transactions set sale_price = 37500 where transaction_code = 135589;
-
 update transactions set sale_price = 18750 where transaction_code = 135671;
-
 update transactions set currency = "INR" where transaction_code in (135589, 135671);
 
 */
 
-/* (A.1.03) Typically, gross margins are expressed as a %age:
+/* (A.3) Typically, gross margins are expressed as a %age:
 
 update transactions set gross_margin = gross_margin * 100; */
 
-/* (A.1.04) Adding by-quarter columns to date table for future analysis:
+/* (A.4) Adding by-quarter columns to date table for future analysis:
 
 Alter table date add year_quarter char(7);
-
 update date set year_quarter = concat(year, "-Q", quarter(date));
-
 alter table date add quarter int after month_name;
-
 update date set quarter = quarter(date);
 
 */
 
-/* (A.1.05) Missing product_codes filled in:
+/* (A.5) Missing product_codes filled in:
 
 insert into products values ("Prod280", "Unknown");
 insert into products values ("Prod281", "Unknown");
@@ -126,6 +112,62 @@ insert into products values ("Prod336", "Unknown");
 insert into products values ("Prod337", "Unknown");
 insert into products values ("Prod338", "Unknown");
 insert into products values ("Prod339", "Unknown");
+
+*/
+
+/* (A.6) Renaming a location to better suit Power BI geo-detection:
+
+update markets set market_name = "Delhi" where market_name = "Delhi NCR"; */
+
+/* (A.8) Correcting locations to avoid splitting of a single cities data across two recorded locations:
+
+update transactions set market_code = "Mark007" where market_code = "Mark013";
+delete from markets where market_code = "Mark013"; */
+
+/* (A.8) Removing unused locations:
+
+delete from markets where market_name = "New York" or market_name = "Paris"; */
+
+/* (A.9) Adding latitudes and longitudes for Power BI visuals:
+
+alter table markets add latitude_city double;
+update markets set latitude_city = 13.08268 where market_name = "Chennai";
+update markets set latitude_city = 19.075983 where market_name = "Mumbai";
+update markets set latitude_city = 23.022505 where market_name = "Ahmedabad";
+update markets set latitude_city = 28.70406 where market_name = "Delhi";
+update markets set latitude_city = 26.46523 where market_name = "Kanpur";
+update markets set latitude_city = 12.97194 where market_name = "Bengaluru";
+update markets set latitude_city = 23.25469 where market_name = "Bhopal";
+update markets set latitude_city = 26.83928 where market_name = "Lucknow";
+update markets set latitude_city = 25.59408 where market_name = "Patna";
+update markets set latitude_city = 9.93697 where market_name = "Kochi";
+update markets set latitude_city = 21.14631 where market_name = "Nagpur";
+update markets set latitude_city = 21.19594 where market_name = "Surat";
+update markets set latitude_city = 17.38405 where market_name = "Hyderabad";
+update markets set latitude_city = 20.27241 where market_name = "Bhubaneshwar";
+
+alter table markets add longitude_city double;
+update markets set longitude_city = 80.27847 where market_name = "Chennai";
+update markets set longitude_city = 72.88261 where market_name = "Mumbai";
+update markets set longitude_city = 72.58727 where market_name = "Ahmedabad";
+update markets set longitude_city = 77.23149 where market_name = "Delhi";
+update markets set longitude_city = 80.34975 where market_name = "Kanpur";
+update markets set longitude_city = 77.59369 where market_name = "Bengaluru";
+update markets set longitude_city = 77.40289 where market_name = "Bhopal";
+update markets set longitude_city = 80.92313 where market_name = "Lucknow";
+update markets set longitude_city = 85.13563 where market_name = "Patna";
+update markets set longitude_city = 76.2603 where market_name = "Kochi";
+update markets set longitude_city = 79.08491 where market_name = "Nagpur";
+update markets set longitude_city = 72.83023 where market_name = "Surat";
+update markets set longitude_city = 78.45636 where market_name = "Hyderabad";
+update markets set longitude_city = 85.83385 where market_name = "Bhubaneshwar";
+
+-- Zone lats and longs are just the average lats and longs of constituent cities
+
+alter table markets add lat_long_zone varchar(24);
+update markets set lat_long_zone = "21.15899433, 76.45680333" where zone = "Central";
+update markets set lat_long_zone = "25.29363917, 78.17625" where zone = "North";
+update markets set lat_long_zone = "14.72961, 79.684534" where zone = "South";
 
 */
 

@@ -1,11 +1,11 @@
 /* This project uses data from (https://www.kaggle.com/datasets/equinxx/spotify-top-50-songs-in-2021),
 which highlights characteristics of the Top 50 most streamed songs on Spotify in 2021. */
 
-/* The bulk of the project is in section (2), in which I investigate the idea that artists with multiple appearances in this list have unique attributes to their features songs.
-Really, this is a rather limited study in actuality, as a small sample of an already small dataset is being investigated. One in which the entries are already similar (they are all Top-50 popular tracks).
- Plus, scale (or lack thereof) aside, it may not even have a sound theoretical underpinning,
-since individual artists may be diverse in the profile of music they output. Really, this project is more of a personal exercise in querying and categorising data.
-It would be more useful to compare a much larger set of tracks/artists,covering the full spectrum of popularities. */
+/* The bulk of the project is in section (2), in which I investigate the idea that artists with multiple appearances in this list have unique attributes to their featured songs.
+Really, this is a rather limited study in actuality, as a small sample of an already small dataset is being investigated.
+Furthermore, it is one in which the entries are already similar (they are all Top-50 popular tracks).
+It would be more useful to compare a much larger set of tracks/artists, covering the full spectrum of popularities.
+That said, this serves both as a practical personal exercise in SQL, and may lay the foundation for a more proper future analysis.  */
 
 DROP TABLE IF EXISTS SpotifyData;
 

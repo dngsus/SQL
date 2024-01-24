@@ -50,6 +50,21 @@ update date set quarter = quarter(date);
 
 */
 
+/* (A.4) Adding by-quarter and by-half columns to date table for future analysis:
+
+Alter table date add year_quarter char(7);
+update date set year_quarter = concat(year, "-Q", quarter(date));
+alter table date add quarter int after month_name;
+update date set quarter = quarter(date);
+
+alter table date add half char(2);
+update date set half = 1 where quarter = 1 or quarter = 2;
+update date set half = 2 where quarter = 3 or quarter = 4;
+Alter table date add year_half char(7);
+update date set year_half = concat(year, "-H", half);
+
+*/
+
 /* (A.5) Missing product_codes filled in:
 
 insert into products values ("Prod280", "Unknown");
